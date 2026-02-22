@@ -1,0 +1,26 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+   
+    <Fragment>
+        <ComponentGroup Id="FanSelectorFiles">
+            <Component Id="cmp016D12B0EDEAA6D0F9B0FADE42EFD276" Directory="FANDIR" Guid="{6382486E-399C-4577-8AE3-98FAA5CBE13A}">
+                <File Id="fil1E2DF33A7C2DD3DE12F7A98ABCD321E9" KeyPath="yes" Source="InstallerSource\ME_Axial Fan.csv" />
+            </Component>
+            <Component Id="cmpDFF6E384A95C554E9675F1930B06B4E2" Directory="FANDIR" Guid="{C6685C06-3239-48E5-B193-ADDC8B1637BA}">
+                <File Id="fil2EEA6B91DA5F3AB7381FE10472FAE014" KeyPath="yes" Source="InstallerSource\ME_Axial Fan.rfa" />
+            </Component>
+            <Component Id="cmp3FD313DCB3746C33FD8554F2F8453073" Directory="FANDIR" Guid="{0BEF5DF8-9737-434D-9A71-D0A6A2B34523}">
+                <File Id="fil1F495EBA47CF1A4906D42DA8AB1CF684" KeyPath="yes" Source="InstallerSource\ME_Centrifugal Fan.csv" />
+            </Component>
+            <Component Id="cmpD8A4FF1504237515C02F2C1D6D3905F2" Directory="FANDIR" Guid="{5B7080B4-5FF3-4765-9C50-F0B5606836D4}">
+                <File Id="filBB795EBD43A82CB61931CEAB63693585" KeyPath="yes" Source="InstallerSource\ME_Centrifugal Fan.rfa" />
+            </Component>
+            <Component Id="cmp288534836FA1F75BD547963AA1DFE7E3" Directory="FANDIR" Guid="{B909418F-97FA-4DE7-8088-4D87AB52D8BB}">
+                <File Id="fil7F3BE4B044E5D6495D2BF9869BE3DB16" KeyPath="yes" Source="InstallerSource\ME_Venta InLine.csv" />
+            </Component>
+            <Component Id="cmp8512D5EA8F289E2A2F773985FA3AFE9B" Directory="FANDIR" Guid="{E1C716EC-BA01-4E05-9792-DA4083C600CD}">
+                <File Id="filD3DB16FAC3F2080556F6D161E78587AF" KeyPath="yes" Source="InstallerSource\ME_Venta InLine.rfa" />
+            </Component>
+        </ComponentGroup>
+    </Fragment>
+</Wix>

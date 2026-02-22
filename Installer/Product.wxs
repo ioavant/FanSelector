@@ -1,0 +1,261 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+	<Product
+	  Id="*"
+	  Name="TES Fan Selector"
+	  Language="1033"
+	  Version="1.0.0"
+	  Manufacturer="TES"
+	  UpgradeCode="DE5C7154-0183-4C78-BAC7-8F8D97E7D5A3">
+
+		<Package InstallerVersion="500" Compressed="yes" InstallScope="perMachine" />
+
+		<!-- Upgrade -->
+		<MajorUpgrade DowngradeErrorMessage="A newer version is already installed." />
+
+		<MediaTemplate />
+
+		<UIRef Id="WixUI_FeatureTree"/>
+		<UIRef Id="WixUI_ErrorProgressText"/>
+
+		<WixVariable Id="WixUILicenseRtf" Value="License.rtf"/>
+
+		<WixVariable Id="WixUIBannerBmp" Value="UI\BannerTes.bmp"/>
+		<WixVariable Id="WixUIDialogBmp" Value="UI\DialogTes.bmp"/>
+
+		<!-- ================== UI CHECKBOXES ================== -->
+		<Property Id="REVIT2022" Value="1"/>
+		<Property Id="REVIT2023" Value="1"/>
+		<Property Id="REVIT2024" Value="1"/>
+		<Property Id="REVIT2025" Value="1"/>
+		<Property Id="REVIT2026" Value="1"/>
+		
+		<!-- ================== DIRECTORIES ================== -->
+		<Directory Id="TARGETDIR" Name="SourceDir">
+			<Directory Id="CommonAppDataFolder">
+				<Directory Id="TESDIR" Name="TES">
+					<Directory Id="FANDIR" Name="FanSelector">
+						<Component Id="CoreFiles" Guid="*">
+							<File Source="$(var.FanSelector.TargetDir)FanSelector.dll"/>
+						</Component>
+						
+							<Directory Id="ResourcesDir" Name="Resources">
+								<Component Id="ResourcesFiles" Guid="A5855FD5-8D3D-4F75-934D-244640CA92B4">
+									<File Source="Assets\Resources\icon.png"/>
+									<File Source="Assets\Resources\web_icon.png"/>
+								</Component>
+							</Directory>
+
+							<Directory Id="ImagesDir" Name="Images">
+								<Component Id="ImagesFiles" Guid="E04D6D60-5B5E-406F-9AA4-42894463FE2F">
+									<File Source="Assets\Images\image1.png"/>
+									<File Source="Assets\Images\image2.png"/>
+									<File Source="Assets\Images\image3.png"/>
+									<File Source="Assets\Images\image4.png"/>
+								</Component>
+							</Directory>
+						
+					</Directory>
+				</Directory>
+				
+			
+
+			<!-- Revit folders -->
+			
+				<Directory Id="Autodesk" Name="Autodesk">
+					<Directory Id="Revit" Name="Revit">
+						<Directory Id="Addins" Name="Addins">
+
+							<Directory Id="R2022" Name="2022">
+								<Component Id="Addin2022" Guid="CE243CF9-C065-41E4-95D7-DAF32135145E">
+									<Condition>REVIT2022=1</Condition>
+									<File Source="TES_22.addin"/>
+								</Component>
+							</Directory>
+
+							<Directory Id="R2023" Name="2023">
+								<Component Id="Addin2023" Guid="EF7EF160-6FF9-481E-B9F4-FB1AE8EF9E37">
+									<Condition>REVIT2023=1</Condition>
+									<File Source="TES_23.addin"/>
+								</Component>
+							</Directory>
+
+							<Directory Id="R2024" Name="2024">
+								<Component Id="Addin2024" Guid="5AB314C0-30B3-4C77-AED1-72E2590BE52F">
+									<Condition>REVIT2024=1</Condition>
+									<File Source="TES_24.addin"/>
+								</Component>
+							</Directory>
+
+							<Directory Id="R2025" Name="2025">
+								<Component Id="Addin2025" Guid="F4D4CB2C-658E-4EC0-AF27-3802614AB5A0">
+									<Condition>REVIT2025=1</Condition>
+									<File Source="TES_25.addin"/>
+								</Component>
+							</Directory>
+
+							<Directory Id="R2026" Name="2026">
+								<Component Id="Addin2026" Guid="17D42C49-BE8D-4CCD-9E70-98CAFDD439C7">
+									<Condition>REVIT2026=1</Condition>
+									<File Source="TES_26.addin"/>
+								</Component>
+							</Directory>
+
+						</Directory>
+					</Directory>
+				</Directory>
+			</Directory>
+		</Directory>
+
+		
+		
+		
+		<!-- ================== FEATURES ================== -->
+		<Feature Id="MainFeature"
+			 Title="TES Fan Selector"
+			 Level="1"
+			 Display="expand">
+
+			<ComponentGroupRef Id="FanSelectorFiles"/>
+			<ComponentGroupRef Id="FanSelectorCoreGroup"/>
+			<ComponentRef Id="CoreFiles"/>
+			<Feature Id="Revit2022Feature"
+             Title="Revit 2022"
+             Level="1"
+             Absent="allow">
+				<ComponentRef Id="Addin2022"/>
+			</Feature>
+
+			<Feature Id="Revit2023Feature"
+					 Title="Revit 2023"
+					 Level="1"
+					 Absent="allow">
+				<ComponentRef Id="Addin2023"/>
+			</Feature>
+
+			<Feature Id="Revit2024Feature"
+					 Title="Revit 2024"
+					 Level="1"
+					 Absent="allow">
+				<ComponentRef Id="Addin2024"/>
+			</Feature>
+
+			<Feature Id="Revit2025Feature"
+					 Title="Revit 2025"
+					 Level="1"
+					 Absent="allow">
+				<ComponentRef Id="Addin2025"/>
+			</Feature>
+
+			<Feature Id="Revit2026Feature"
+					 Title="Revit 2026"
+					 Level="1"
+					 Absent="allow">
+				<ComponentRef Id="Addin2026"/>
+			</Feature>
+		</Feature>
+
+	</Product>
+
+	<!-- ================== COMPONENT GROUP ================== -->
+	<Fragment>
+		<ComponentGroup Id="FanSelectorCoreGroup">
+			<ComponentRef Id="CoreFiles"/>
+			<ComponentRef Id="ResourcesFiles"/>
+			<ComponentRef Id="ImagesFiles"/>
+		</ComponentGroup>
+	</Fragment>
+
+	<Fragment>
+		<UI>
+			<Dialog Id="RevitSelectionDlg"
+					Width="370"
+					Height="270"
+					Title="Select Revit Versions">
+
+				<Control Id="Title"
+						 Type="Text"
+						 X="15" Y="6"
+						 Width="340" Height="15"
+						 Transparent="yes"
+						 NoPrefix="yes"
+						 Text="Select Revit versions to install the add-in:"/>
+
+				<Control Id="Revit2022"
+						 Type="CheckBox"
+						 X="20" Y="40"
+						 Width="200" Height="17"
+						 Property="REVIT2022"
+						 CheckBoxValue="1"
+						 Text="Revit 2022"/>
+
+				<Control Id="Revit2023"
+						 Type="CheckBox"
+						 X="20" Y="60"
+						 Width="200" Height="17"
+						 Property="REVIT2023"
+						 CheckBoxValue="1"
+						 Text="Revit 2023"/>
+
+				<Control Id="Revit2024"
+						 Type="CheckBox"
+						 X="20" Y="80"
+						 Width="200" Height="17"
+						 Property="REVIT2024"
+						 CheckBoxValue="1"
+						 Text="Revit 2024"/>
+
+				<Control Id="Revit2025"
+						 Type="CheckBox"
+						 X="20" Y="100"
+						 Width="200" Height="17"
+						 Property="REVIT2025"
+						 CheckBoxValue="1"
+						 Text="Revit 2025"/>
+
+				<Control Id="Revit2026"
+						 Type="CheckBox"
+						 X="20" Y="120"
+						 Width="200" Height="17"
+						 Property="REVIT2026"
+						 CheckBoxValue="1"
+						 Text="Revit 2026"/>
+
+				<Control Id="Next"
+						 Type="PushButton"
+						 X="236" Y="243"
+						 Width="56" Height="17"
+						 Default="yes"
+						 Text="Next">
+					<Publish Event="NewDialog" Value="VerifyReadyDlg">1</Publish>
+				</Control>
+
+				<Control Id="Back"
+						 Type="PushButton"
+						 X="180" Y="243"
+						 Width="56" Height="17"
+						 Text="Back">
+					<Publish Event="NewDialog" Value="WelcomeDlg">1</Publish>
+				</Control>
+
+				<Control Id="Cancel"
+						 Type="PushButton"
+						 X="304" Y="243"
+						 Width="56" Height="17"
+						 Cancel="yes"
+						 Text="Cancel">
+					<Publish Event="SpawnDialog" Value="CancelDlg">1</Publish>
+				</Control>
+
+			</Dialog>
+
+			<Publish Dialog="WelcomeDlg"
+					 Control="Next"
+					 Event="NewDialog"
+					 Value="RevitSelectionDlg">1</Publish>
+
+		</UI>
+	</Fragment>
+	
+	
+</Wix>
