@@ -24,7 +24,6 @@
   </ItemGroup>
   <ItemGroup>
     <Folder Include="Assets" />
-    <Folder Include="Assets\Resources" />
     <Folder Include="UI" />
   </ItemGroup>
   <ItemGroup>

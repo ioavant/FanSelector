@@ -1,5 +1,6 @@
 ﻿using Autodesk.Revit.UI;
 using System;
+using System.Collections.Generic;
 using System.Configuration.Assemblies;
 using System.IO;
 using System.Reflection;
@@ -27,11 +28,20 @@ namespace FanSelector
             CreateTabIfNotExists(application, tabName);
 
             // Create a ribbon panel within the custom tab
-            RibbonPanel ribbonPanel = application.CreateRibbonPanel(tabName, "Tools");
+            string panelName = "Tools";
+            try
+            {
+                application.CreateRibbonTab(tabName);
+            }
+            catch
+            {
+                // вкладка уже существует
+            }
+
+            RibbonPanel ribbonPanel = GetOrCreatePanel(application, tabName, panelName);
 
             // Create a push button to trigger the main command
             string thisAssemblyPath = Assembly.GetExecutingAssembly().Location;
-            //PushButtonData buttonData1 = new PushButtonData("btnRunApp", "Fan Selector", thisAssemblyPath, "TES_test2.Main");
             PushButtonData buttonData1 = new PushButtonData(
                 "btnRunApp",
                 "Fan Selector",
@@ -39,32 +49,29 @@ namespace FanSelector
                 "TES_test2.Main"
             );
 
-
             // Optionally add an icon for the main command
             PushButton pushButton1 = ribbonPanel.AddItem(buttonData1) as PushButton;
             pushButton1.ToolTip = "Run the TES Fan Selector application. Specify Airflow and Pressure value and press search!";
-            
-            
-            string iconPath1 = GetResourcePath("Resources", "icon.png");
-            if (iconPath1 != null)
+
+                pushButton1.LargeImage = LoadImage("icon.png");
+
+            try
             {
-                Uri uriImage1 = new Uri(iconPath1, UriKind.Absolute);
-                BitmapImage largeImage1 = new BitmapImage(uriImage1);
-                pushButton1.LargeImage = largeImage1;
+                // Create a ribbon panel within the custom tab
+                string AboutpanelName = "About";
+                RibbonPanel aboutPanel = GetOrCreatePanel(application, tabName, AboutpanelName);
+
+                // Create a push button to open the web page
+                PushButtonData webButtonData = new PushButtonData("btnOpenWebPage", "TES\nBIM Guide", Assembly.GetExecutingAssembly().Location, "TES_test2.OpenWebPage");
+
+                // Optionally add an icon for the web page command
+                PushButton webButton = aboutPanel.AddItem(webButtonData) as PushButton;
+                webButton.ToolTip = "Open the TES BIM standart web page.";
+                webButton.LargeImage = LoadImage("web_icon.png");
             }
-
-            // Create a push button to open the web page
-            PushButtonData buttonData2 = new PushButtonData("btnOpenWebPage", "TES BIM Guide", thisAssemblyPath, "TES_test2.OpenWebPage");
-
-            // Optionally add an icon for the web page command
-            PushButton pushButton2 = ribbonPanel.AddItem(buttonData2) as PushButton;
-            pushButton2.ToolTip = "Open the TES BIM standart web page.";
-            string iconPath2 = GetResourcePath("Resources", "web_icon.png");
-            if (iconPath2 != null)
+            catch (Autodesk.Revit.Exceptions.ArgumentException)
             {
-                Uri uriImage2 = new Uri(iconPath2, UriKind.Absolute);
-                BitmapImage largeImage2 = new BitmapImage(uriImage2);
-                pushButton2.LargeImage = largeImage2;
+                // Button already exists → OK
             }
 
             return Result.Succeeded;
@@ -74,26 +81,6 @@ namespace FanSelector
         {
             // Nothing to clean up in this simple case
             return Result.Succeeded;
-        }
-
-        private string GetResourcePath(string folderName, string fileName)
-        {
-            // Check if the file exists in the primary directory
-            string primaryPath = Path.Combine(primaryDirectory, folderName, fileName);
-            if (File.Exists(primaryPath))
-            {
-                return primaryPath;
-            }
-
-            // Check if the file exists in the fallback directory
-            string fallbackPath = Path.Combine(fallbackDirectory, folderName, fileName);
-            if (File.Exists(fallbackPath))
-            {
-                return fallbackPath;
-            }
-
-            // File not found
-            return null;
         }
 
         private void CreateTabIfNotExists(UIControlledApplication app, string tabName)
@@ -106,6 +93,38 @@ namespace FanSelector
             {
                 // Tab already exists → OK
             }
+        }
+
+        private RibbonPanel GetOrCreatePanel(UIControlledApplication app, string tabName, string panelName)
+        {
+            // Получаем все панели вкладки
+            IList<RibbonPanel> panels = app.GetRibbonPanels(tabName);
+
+            // Ищем нужную
+            foreach (RibbonPanel panel in panels)
+            {
+                if (panel.Name == panelName)
+                    return panel;
+            }
+
+            // Если не нашли — создаем
+            return app.CreateRibbonPanel(tabName, panelName);
+        }
+
+        // Хелпер — грузим иконки из ресурсов сборки
+        private BitmapImage LoadImage(string resourceName)
+        {
+            string fullName = $"FanSelector.Resources.{resourceName}";
+            var stream = Assembly.GetExecutingAssembly()
+                                 .GetManifestResourceStream(fullName);
+            if (stream == null) return null;
+
+            var image = new BitmapImage();
+            image.BeginInit();
+            image.StreamSource = stream;
+            image.CacheOption = BitmapCacheOption.OnLoad;
+            image.EndInit();
+            return image;
         }
     }
 }
