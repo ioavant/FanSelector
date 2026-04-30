@@ -13,7 +13,7 @@
 		<!-- Upgrade -->
 		<MajorUpgrade DowngradeErrorMessage="A newer version is already installed." />
 
-		<MediaTemplate />
+		<MediaTemplate EmbedCab="yes" />
 
 		<UIRef Id="WixUI_FeatureTree"/>
 		<UIRef Id="WixUI_ErrorProgressText"/>
