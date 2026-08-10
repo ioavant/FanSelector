@@ -96,18 +96,11 @@ namespace FanSelector.UI
                 return;
             }
 
-            // The search boxes are read in the units of the very parameter they
-            // are compared against, so a project in CFM and inWG just works.
-            // The first of these reads the family definition, which is not
-            // instant on a family with hundreds of types; it is cached afterwards.
-            System.Windows.Input.Mouse.OverrideCursor = System.Windows.Input.Cursors.Wait;
-            try
-            {
-                _airFlowSpec = FanSearch.SpecFor(_doc, mapping, FanQuantity.AirFlow);
-                _pressureSpec = FanSearch.SpecFor(_doc, mapping, FanQuantity.Pressure);
-            }
-            finally { System.Windows.Input.Mouse.OverrideCursor = null; }
-
+            // The search boxes are read in the units the catalogue column itself
+            // declares, so a catalogue in CFM and inWG works as well as one in
+            // m³/h and Pa.
+            _airFlowSpec = FanSearch.SpecFor(mapping, FanQuantity.AirFlow);
+            _pressureSpec = FanSearch.SpecFor(mapping, FanQuantity.Pressure);
             AirFlowUnit.Text = RevitUnits.Symbol(_units, _airFlowSpec);
             PressureUnit.Text = RevitUnits.Symbol(_units, _pressureSpec);
 
@@ -126,15 +119,23 @@ namespace FanSelector.UI
             AddColumn(Quantities.AirFlow.ColumnHeader, "AirFlowText", 1);
             AddColumn(Quantities.Pressure.ColumnHeader, "PressureText", 1);
 
-            if (!string.IsNullOrEmpty(mapping.Power)) AddColumn(Quantities.Power.ColumnHeader, "PowerText", 1);
-            if (!string.IsNullOrEmpty(mapping.Speed)) AddColumn(Quantities.Speed.ColumnHeader, "SpeedText", 1);
-            if (!string.IsNullOrEmpty(mapping.Sfp)) AddColumn(Quantities.Sfp.ColumnHeader, "SfpText", 1);
-            if (!string.IsNullOrEmpty(mapping.SoundPower)) AddColumn(Quantities.SoundPower.ColumnHeader, "SoundText", 1);
+            if (!string.IsNullOrEmpty(mapping.PowerColumn))
+                AddColumn(Quantities.Power.ColumnHeader, "PowerText", 1);
+            if (!string.IsNullOrEmpty(mapping.SpeedColumn))
+                AddColumn(Quantities.Speed.ColumnHeader, "SpeedText", 1);
+            if (!string.IsNullOrEmpty(mapping.SfpColumn))
+                AddColumn(Quantities.Sfp.ColumnHeader, "SfpText", 1);
+            if (!string.IsNullOrEmpty(mapping.SoundPowerColumn))
+                AddColumn(Quantities.SoundPower.ColumnHeader, "SoundText", 1);
 
             for (int i = 0; i < mapping.ExtraColumns.Count; i++)
                 AddColumn(mapping.ExtraColumns[i], "Extras[" + i + "]", 1);
 
             AddColumn("Off by", "DeviationText", 0.7);
+            // A catalogue holds every type the manufacturer offers, so most rows
+            // are normally not in the model yet. Saying so up front beats a
+            // surprise at insert time.
+            AddColumn("In model", "LoadedText", 0.8);
         }
 
         private void AddColumn(string header, string path, double starWidth)
@@ -208,12 +209,15 @@ namespace FanSelector.UI
             if (!string.IsNullOrEmpty(result.Note))
                 StatusText.Text = result.Note;
             else if (result.Candidates.Count == 0)
-                StatusText.Text = "None of the " + result.TypesExamined + " types of \"" + mapping.FamilyName +
-                                  "\" is within " + tolerance.ToString("0.#") +
-                                  "% on both figures. Widen the tolerance, or load more types of the family.";
+                StatusText.Text = "None of the " + result.RowsExamined + " types in the catalogue is within "
+                                  + tolerance.ToString("0.#") + "% on both figures. Widen the tolerance.";
             else
-                StatusText.Text = result.Candidates.Count + " of " + result.TypesExamined +
-                                  " types are within " + tolerance.ToString("0.#") + "%.";
+                StatusText.Text = result.Candidates.Count + " of " + result.RowsExamined
+                                  + " catalogue types are within " + tolerance.ToString("0.#") + "%."
+                                  + (result.NotLoaded > 0
+                                        ? "  " + result.NotLoaded + " of them are not in this model yet and "
+                                          + "will be loaded when inserted."
+                                        : string.Empty);
 
             if (result.Candidates.Count > 0) ResultsGrid.SelectedIndex = 0;
         }
@@ -241,7 +245,10 @@ namespace FanSelector.UI
         {
             var candidate = ResultsGrid.SelectedItem as FanCandidate;
             InsertButton.IsEnabled = candidate != null;
-            PreviewImage.Source = candidate == null
+
+            // Revit can only draw a preview of a type it actually has; a catalogue
+            // row that is not loaded yet simply has no picture.
+            PreviewImage.Source = candidate == null || candidate.Symbol == null
                 ? null
                 : WindowSupport.FromBitmap(Preview(candidate.Symbol));
         }

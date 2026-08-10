@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
@@ -12,21 +13,25 @@ using Grid = System.Windows.Controls.Grid;
 namespace FanSelector.UI
 {
     /// <summary>
-    /// Where the user tells Fan Selector what the parameters of their own fan
-    /// families mean. Nothing here is specific to any manufacturer — that is the
-    /// entire point of the dialog.
+    /// Where the user wires up a fan family: which column of its type catalogue
+    /// carries each figure, and which parameter of the family each figure should
+    /// be written to when a fan is placed. Nothing here is specific to any
+    /// manufacturer — that is the entire point of the dialog.
     /// </summary>
     internal partial class OptionsWindow : Window
     {
         private readonly Document _doc;
         private readonly Units _units;
-        private readonly Dictionary<FanQuantity, ComboBox> _combos =
+        private readonly Dictionary<FanQuantity, ComboBox> _columnCombos =
+            new Dictionary<FanQuantity, ComboBox>();
+        private readonly Dictionary<FanQuantity, ComboBox> _paramCombos =
             new Dictionary<FanQuantity, ComboBox>();
 
         /// <summary>Working copy; the caller's settings are only touched on OK.</summary>
         public FanSettings Settings { get; private set; }
 
         private FamilyMapping _current;
+        private CatalogFile _file;
         private FamilyCatalog _catalog;
         private bool _loading;
 
@@ -55,9 +60,12 @@ namespace FanSelector.UI
                 BannerBorder.Visibility = System.Windows.Visibility.Visible;
             }
 
-            if (!string.IsNullOrEmpty(notice))
+            // A settings file that would not load matters more than any other
+            // notice: it is the difference between "nothing saved" and "lost".
+            string trouble = FanSettings.LastLoadError ?? notice;
+            if (!string.IsNullOrEmpty(trouble))
             {
-                NoticeText.Text = notice;
+                NoticeText.Text = trouble;
                 NoticeBorder.Visibility = System.Windows.Visibility.Visible;
             }
 
@@ -71,7 +79,7 @@ namespace FanSelector.UI
 
             string samples = FanSettings.SamplesFolder;
             if (samples != null)
-                FamilyHint.Text += "\nSample fan families to try this against were installed in:\n" + samples;
+                FamilyHint.Text += "\nSample fan families and their catalogues are in:\n" + samples;
 
             RefreshFamilyList(Settings.Families.FirstOrDefault());
         }
@@ -93,9 +101,10 @@ namespace FanSelector.UI
         private void BuildMappingRows()
         {
             QuantityInfo[] all = Quantities.All;
-            for (int row = 0; row < all.Length; row++)
+            for (int i = 0; i < all.Length; i++)
             {
-                QuantityInfo info = all[row];
+                QuantityInfo info = all[i];
+                int row = i + 1;   // row 0 holds the two column headings
                 MappingGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
                 var label = new TextBlock
@@ -106,20 +115,12 @@ namespace FanSelector.UI
                 };
                 Grid.SetRow(label, row);
                 Grid.SetColumn(label, 0);
-
-                var combo = new ComboBox
-                {
-                    DisplayMemberPath = "Label",
-                    Margin = new Thickness(0, 0, 0, 6),
-                    Tag = info
-                };
-                combo.SelectionChanged += OnMappingChanged;
-                Grid.SetRow(combo, row);
-                Grid.SetColumn(combo, 1);
-
                 MappingGrid.Children.Add(label);
-                MappingGrid.Children.Add(combo);
-                _combos[info.Quantity] = combo;
+
+                ComboBox columnCombo = AddCombo(row, 1, info, OnColumnChanged);
+                ComboBox paramCombo = AddCombo(row, 3, info, OnParamChanged);
+                _columnCombos[info.Quantity] = columnCombo;
+                _paramCombos[info.Quantity] = paramCombo;
             }
 
             MappingGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -129,9 +130,24 @@ namespace FanSelector.UI
                 Foreground = System.Windows.Media.Brushes.Gray,
                 Margin = new Thickness(0, 2, 0, 0)
             };
-            Grid.SetRow(footnote, all.Length);
+            Grid.SetRow(footnote, all.Length + 1);
             Grid.SetColumn(footnote, 1);
             MappingGrid.Children.Add(footnote);
+        }
+
+        private ComboBox AddCombo(int row, int column, QuantityInfo info, SelectionChangedEventHandler handler)
+        {
+            var combo = new ComboBox
+            {
+                DisplayMemberPath = "Label",
+                Margin = new Thickness(0, 0, 0, 6),
+                Tag = info
+            };
+            combo.SelectionChanged += handler;
+            Grid.SetRow(combo, row);
+            Grid.SetColumn(combo, column);
+            MappingGrid.Children.Add(combo);
+            return combo;
         }
 
         // ── Family list ───────────────────────────────────────────────────────
@@ -142,9 +158,7 @@ namespace FanSelector.UI
             FamilyList.ItemsSource = null;
             FamilyList.ItemsSource = Settings.Families;
 
-            List<string> configured = Settings.Families
-                .Select(f => f.FamilyName)
-                .ToList();
+            List<string> configured = Settings.Families.Select(f => f.FamilyName).ToList();
             AddFamilyBox.ItemsSource = ParameterScanner.EquipmentFamilies(_doc)
                 .Where(n => !configured.Contains(n, StringComparer.OrdinalIgnoreCase))
                 .ToList();
@@ -172,10 +186,31 @@ namespace FanSelector.UI
                 return;
             }
 
-            var mapping = new FamilyMapping { FamilyName = family };
-            GuessMapping(mapping);
+            var mapping = new FamilyMapping
+            {
+                FamilyName = family,
+                CatalogPath = GuessCatalogPath(family)
+            };
             Settings.Families.Add(mapping);
             RefreshFamilyList(mapping);
+            GuessMapping();
+            LoadMapping(mapping);
+        }
+
+        /// <summary>
+        /// A catalogue named after the family, in the folder the sample families
+        /// were installed to. Saves the common case a trip through Browse.
+        /// </summary>
+        private static string GuessCatalogPath(string familyName)
+        {
+            try
+            {
+                string samples = FanSettings.SamplesFolder;
+                if (samples == null) return null;
+                string candidate = Path.Combine(samples, familyName + ".csv");
+                return File.Exists(candidate) ? candidate : null;
+            }
+            catch { return null; }
         }
 
         private void OnRemoveFamily(object sender, RoutedEventArgs e)
@@ -186,139 +221,212 @@ namespace FanSelector.UI
             RefreshFamilyList(null);
         }
 
-        /// <summary>Pre-fill what can be worked out from the family's own parameters.</summary>
-        private void GuessMapping(FamilyMapping mapping)
+        /// <summary>Pre-fill what can be worked out from the catalogue and the family.</summary>
+        private void GuessMapping()
         {
-            FamilyCatalog catalog = FamilyCatalog.For(_doc, mapping.FamilyName);
-            if (!catalog.IsUsable) return;
+            if (_current == null) return;
+
+            CatalogFile file = CatalogFile.For(_current.CatalogPath);
+            FamilyCatalog catalog = FamilyCatalog.For(_doc, _current.FamilyName);
+
             foreach (QuantityInfo info in Quantities.All)
-                mapping.Set(info.Quantity, ParameterScanner.Guess(catalog, info));
+            {
+                if (string.IsNullOrEmpty(_current.Column(info.Quantity)))
+                    _current.SetColumn(info.Quantity, ParameterScanner.GuessColumn(file, info));
+                if (string.IsNullOrEmpty(_current.Param(info.Quantity)))
+                    _current.SetParam(info.Quantity, ParameterScanner.GuessParam(catalog, info, _units));
+            }
+        }
+
+        // ── Catalogue file ────────────────────────────────────────────────────
+
+        private void OnBrowseCatalog(object sender, RoutedEventArgs e)
+        {
+            if (_current == null) return;
+
+            var dialog = new Microsoft.Win32.OpenFileDialog
+            {
+                Title = "Select the type catalogue for " + _current.FamilyName,
+                Filter = "Type catalogue (*.csv)|*.csv|All files (*.*)|*.*",
+                CheckFileExists = true
+            };
+
+            try
+            {
+                if (!string.IsNullOrEmpty(_current.CatalogPath))
+                    dialog.InitialDirectory = Path.GetDirectoryName(_current.CatalogPath);
+                else if (FanSettings.SamplesFolder != null)
+                    dialog.InitialDirectory = FanSettings.SamplesFolder;
+            }
+            catch { /* a bad remembered folder is not worth failing over */ }
+
+            if (dialog.ShowDialog(this) != true) return;
+
+            CatalogBox.Text = dialog.FileName;   // TextChanged does the rest
+        }
+
+        private void OnCatalogTextChanged(object sender, TextChangedEventArgs e)
+        {
+            if (_loading || _current == null) return;
+            _current.CatalogPath = string.IsNullOrWhiteSpace(CatalogBox.Text)
+                ? null : CatalogBox.Text.Trim();
+            GuessMapping();
+            LoadMapping(_current);
         }
 
         // ── Mapping panel ─────────────────────────────────────────────────────
 
-        /// <summary>
-        /// The instance-parameter box is free text, so it has no SelectionChanged
-        /// to write itself back. Committing it whenever the panel is about to be
-        /// reloaded is what stops a typed name from being lost by switching family.
-        /// </summary>
-        private void CommitInstanceBox()
-        {
-            if (_loading || _current == null) return;
-            _current.InstanceAirFlow = string.IsNullOrWhiteSpace(InstanceBox.Text)
-                ? null : InstanceBox.Text.Trim();
-        }
-
         private void LoadMapping(FamilyMapping mapping)
         {
-            CommitInstanceBox();
-
             _current = mapping;
+            _file = null;
             _catalog = null;
             MappingPanel.IsEnabled = mapping != null;
             MappingWarnBorder.Visibility = System.Windows.Visibility.Collapsed;
-            CopyParamsButton.IsEnabled = mapping != null;
 
             if (mapping == null)
             {
                 MappingHeader.Text = "Parameter mapping";
-                foreach (ComboBox combo in _combos.Values) combo.ItemsSource = null;
+                CatalogBox.Text = string.Empty;
+                CatalogStatus.Text = string.Empty;
+                foreach (ComboBox combo in _columnCombos.Values) combo.ItemsSource = null;
+                foreach (ComboBox combo in _paramCombos.Values) combo.ItemsSource = null;
                 ExtraList.ItemsSource = null;
                 ExtraPicker.ItemsSource = null;
-                InstanceBox.ItemsSource = null;
-                InstanceBox.Text = string.Empty;
-                InstanceHint.Text = string.Empty;
                 return;
             }
-
-            // Reading a family means opening its definition, which is not instant
-            // on a family with hundreds of types.
-            System.Windows.Input.Mouse.OverrideCursor = System.Windows.Input.Cursors.Wait;
-            try { _catalog = FamilyCatalog.For(_doc, mapping.FamilyName); }
-            finally { System.Windows.Input.Mouse.OverrideCursor = null; }
 
             MappingHeader.Text = "Parameter mapping for \"" + mapping.FamilyName + "\"";
 
             _loading = true;
             try
             {
-                if (!_catalog.IsUsable)
-                {
-                    // Keep the mapping exactly as it is rather than blanking it:
-                    // it was made against a project where the family could be read.
-                    foreach (QuantityInfo info in Quantities.All)
-                    {
-                        ComboBox combo = _combos[info.Quantity];
-                        combo.ItemsSource = Stored(mapping.Get(info.Quantity));
-                        combo.SelectedIndex = combo.Items.Count - 1;
-                        combo.IsEnabled = false;
-                    }
-                    ExtraList.ItemsSource = new List<string>(mapping.ExtraColumns);
-                    ExtraPicker.ItemsSource = null;
-                    InstanceBox.ItemsSource = null;
-                    InstanceBox.Text = mapping.InstanceAirFlow ?? string.Empty;
-                    InstanceHint.Text = string.Empty;
+                CatalogBox.Text = mapping.CatalogPath ?? string.Empty;
 
-                    MappingWarnText.Text = _catalog.Problem;
-                    MappingWarnBorder.Visibility = System.Windows.Visibility.Visible;
-                    return;
-                }
+                _file = CatalogFile.For(mapping.CatalogPath);
+
+                // Reading the family definition is the slow part, and it is only
+                // needed for the "write onto the fan" half.
+                System.Windows.Input.Mouse.OverrideCursor = System.Windows.Input.Cursors.Wait;
+                try { _catalog = FamilyCatalog.For(_doc, mapping.FamilyName); }
+                finally { System.Windows.Input.Mouse.OverrideCursor = null; }
+
+                CatalogStatus.Text = _file.IsUsable
+                    ? _file.Rows.Count + " types, " + _file.Columns.Count + " columns"
+                      + (_file.SkippedLines > 0 ? "   (" + _file.SkippedLines + " lines skipped)" : "")
+                    : _file.Problem;
 
                 bool showAll = ShowAllBox.IsChecked == true;
                 foreach (QuantityInfo info in Quantities.All)
                 {
-                    ComboBox combo = _combos[info.Quantity];
-                    combo.IsEnabled = true;
-
-                    var choices = new List<ParamChoice> { ParamChoice.None() };
-                    choices.AddRange(ParameterScanner.Choices(_catalog, info, showAll, _units));
-
-                    string stored = mapping.Get(info.Quantity);
-                    if (!string.IsNullOrEmpty(stored) &&
-                        !choices.Any(c => string.Equals(c.Name, stored, StringComparison.OrdinalIgnoreCase)))
-                    {
-                        // Whatever the filter thinks, the user already chose this
-                        // one. Dropping it here would silently unmap it on OK.
-                        choices.Add(new ParamChoice
-                        {
-                            Name = stored,
-                            SpecLabel = "(not found on this family)"
-                        });
-                    }
-
-                    combo.ItemsSource = choices;
-                    combo.SelectedItem = choices.FirstOrDefault(
-                        c => string.Equals(c.Name, stored, StringComparison.OrdinalIgnoreCase)) ?? choices[0];
+                    FillColumnCombo(_columnCombos[info.Quantity], info, showAll);
+                    FillParamCombo(_paramCombos[info.Quantity], info, showAll);
                 }
 
                 ExtraList.ItemsSource = new List<string>(mapping.ExtraColumns);
-                ExtraPicker.ItemsSource = ParameterScanner.AllChoices(_catalog, _units);
-
-                List<ParamChoice> instanceChoices = ParameterScanner.InstanceChoices(_catalog, _units);
-                InstanceBox.ItemsSource = instanceChoices.Select(c => c.Name).ToList();
-                InstanceBox.Text = mapping.InstanceAirFlow ?? string.Empty;
-                InstanceHint.Text = instanceChoices.Count == 0
-                    ? "This family declares no instance parameters."
-                    : string.Empty;
+                ExtraPicker.ItemsSource = _file.IsUsable ? _file.Columns : new List<CatalogColumn>();
 
                 ShowDiagnosis();
             }
             finally { _loading = false; }
         }
 
+        private void FillColumnCombo(ComboBox combo, QuantityInfo info, bool showAll)
+        {
+            string stored = _current.Column(info.Quantity);
+            var choices = new List<CatalogColumn> { null };   // null == "(not mapped)"
+            choices.AddRange(ParameterScanner.Columns(_file, info, showAll));
+
+            if (!string.IsNullOrEmpty(stored) &&
+                !choices.Any(c => c != null && string.Equals(c.Name, stored, StringComparison.OrdinalIgnoreCase)))
+            {
+                // Whatever the filter thinks, the user already chose this one.
+                // Dropping it here would silently unmap it on OK.
+                choices.Add(new CatalogColumn { Name = stored, SpecToken = "(not in this catalogue)" });
+            }
+
+            combo.ItemsSource = choices;
+            combo.ItemTemplate = null;
+            combo.DisplayMemberPath = "Label";
+            combo.SelectedItem = choices.FirstOrDefault(
+                c => c != null && string.Equals(c.Name, stored, StringComparison.OrdinalIgnoreCase));
+            if (combo.SelectedItem == null) combo.SelectedIndex = 0;
+            combo.IsEnabled = _file != null && _file.IsUsable;
+        }
+
+        private void FillParamCombo(ComboBox combo, QuantityInfo info, bool showAll)
+        {
+            string stored = _current.Param(info.Quantity);
+            var choices = new List<ParamChoice> { ParamChoice.None() };
+            choices.AddRange(ParameterScanner.Params(_catalog, info, showAll, _units));
+
+            if (!string.IsNullOrEmpty(stored) &&
+                !choices.Any(c => string.Equals(c.Name, stored, StringComparison.OrdinalIgnoreCase)))
+            {
+                choices.Add(new ParamChoice { Name = stored, SpecLabel = "(not found on this family)" });
+            }
+
+            combo.ItemsSource = choices;
+            combo.DisplayMemberPath = "Label";
+            combo.SelectedItem = choices.FirstOrDefault(
+                c => string.Equals(c.Name, stored, StringComparison.OrdinalIgnoreCase)) ?? choices[0];
+            combo.IsEnabled = _catalog != null && _catalog.IsUsable;
+        }
+
+        private void OnColumnChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (_loading || _current == null) return;
+            var combo = (ComboBox)sender;
+            var info = (QuantityInfo)combo.Tag;
+            var column = combo.SelectedItem as CatalogColumn;
+            _current.SetColumn(info.Quantity, column == null ? null : column.Name);
+        }
+
+        private void OnParamChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (_loading || _current == null) return;
+            var combo = (ComboBox)sender;
+            var info = (QuantityInfo)combo.Tag;
+            var choice = combo.SelectedItem as ParamChoice;
+            _current.SetParam(info.Quantity, choice == null || choice.IsNone ? null : choice.Name);
+        }
+
+        private void OnShowAllChanged(object sender, RoutedEventArgs e)
+        {
+            LoadMapping(_current);
+        }
+
         /// <summary>
-        /// Spell out what the family does not offer. The required figures get a
+        /// Spell out what the catalogue does not offer. The required figures get a
         /// full explanation, the optional ones are just named, so the panel does
         /// not turn into a wall of warnings.
         /// </summary>
         private void ShowDiagnosis()
         {
+            if (_catalog != null && !_catalog.IsUsable)
+            {
+                MappingWarnText.Text = _catalog.Problem
+                    + "\n\nThe search itself does not need this — it reads the catalogue. Only the "
+                    + "\"write onto the placed fan\" column is unavailable.";
+                MappingWarnBorder.Visibility = System.Windows.Visibility.Visible;
+                return;
+            }
+
             var explained = new List<string>();
             var alsoMissing = new List<string>();
 
             foreach (QuantityInfo info in Quantities.All)
             {
-                string problem = ParameterScanner.Diagnose(_catalog, info);
+                // A mapped column whose unit is a mystery is worse than an
+                // unmapped one: it produces a number that looks right.
+                CatalogColumn mapped = _file == null ? null : _file.Column(_current.Column(info.Quantity));
+                if (mapped != null && !mapped.UnitUnderstood)
+                    explained.Add(info.DisplayName + ": the catalogue declares column \"" + mapped.Name
+                                  + "\" in \"" + mapped.UnitToken + "\", which this add-in does not know. "
+                                  + "Its values are used exactly as written, so they are only right if the "
+                                  + "catalogue already holds them in Revit's own units.");
+
+                string problem = ParameterScanner.DiagnoseColumn(_file, info);
                 if (problem == null) continue;
                 if (info.Required) explained.Add(problem);
                 else alsoMissing.Add(info.DisplayName);
@@ -332,8 +440,8 @@ namespace FanSelector.UI
 
             var text = new List<string>(explained);
             if (alsoMissing.Count > 0)
-                text.Add("Nothing fitting for these either, which is fine if the family simply has no such "
-                         + "data: " + string.Join(", ", alsoMissing) + ".");
+                text.Add("No column fits these either, which is fine if the catalogue simply does not carry "
+                         + "them: " + string.Join(", ", alsoMissing) + ".");
 
             MappingWarnText.Text = string.Join("\n\n", text);
             MappingWarnBorder.Visibility = System.Windows.Visibility.Visible;
@@ -342,17 +450,16 @@ namespace FanSelector.UI
         private void OnCopyParameters(object sender, RoutedEventArgs e)
         {
             if (_current == null) return;
-            string dump = ParameterScanner.Dump(_doc, _catalog, _units);
+            string dump = ParameterScanner.Dump(_doc, _current, _file, _catalog, _units);
             try
             {
                 // SetDataObject with copy:true, not SetText: the clipboard is a
                 // shared resource and Revit is not the only thing touching it.
                 Clipboard.SetDataObject(dump, true);
                 MessageBox.Show(this,
-                    "The parameter list of \"" + _current.FamilyName + "\" is on the clipboard.\n\n"
-                    + "Paste it anywhere to see every parameter the family declares — its kind, its unit, "
-                    + "whether it belongs to the type or to each instance — and the values of the first "
-                    + "few types.",
+                    "The details for \"" + _current.FamilyName + "\" are on the clipboard.\n\n"
+                    + "Paste them anywhere to see the catalogue's columns and first rows, and every "
+                    + "parameter the family declares.",
                     Brand.FullProductName, MessageBoxButton.OK, MessageBoxImage.Information);
             }
             catch (Exception exception)
@@ -362,37 +469,16 @@ namespace FanSelector.UI
             }
         }
 
-        private static List<ParamChoice> Stored(string name)
-        {
-            var choices = new List<ParamChoice> { ParamChoice.None() };
-            if (!string.IsNullOrEmpty(name)) choices.Add(new ParamChoice { Name = name });
-            return choices;
-        }
-
-        private void OnMappingChanged(object sender, SelectionChangedEventArgs e)
-        {
-            if (_loading || _current == null) return;
-            var combo = (ComboBox)sender;
-            var info = (QuantityInfo)combo.Tag;
-            var choice = combo.SelectedItem as ParamChoice;
-            _current.Set(info.Quantity, choice == null || choice.IsNone ? null : choice.Name);
-        }
-
-        private void OnShowAllChanged(object sender, RoutedEventArgs e)
-        {
-            LoadMapping(_current);
-        }
-
         // ── Extra columns ─────────────────────────────────────────────────────
 
         private void OnAddExtra(object sender, RoutedEventArgs e)
         {
             if (_current == null) return;
-            var choice = ExtraPicker.SelectedItem as ParamChoice;
-            if (choice == null || string.IsNullOrEmpty(choice.Name)) return;
+            var column = ExtraPicker.SelectedItem as CatalogColumn;
+            if (column == null || string.IsNullOrEmpty(column.Name)) return;
 
-            if (_current.ExtraColumns.Contains(choice.Name, StringComparer.OrdinalIgnoreCase)) return;
-            _current.ExtraColumns.Add(choice.Name);
+            if (_current.ExtraColumns.Contains(column.Name, StringComparer.OrdinalIgnoreCase)) return;
+            _current.ExtraColumns.Add(column.Name);
             ExtraList.ItemsSource = new List<string>(_current.ExtraColumns);
         }
 
@@ -409,8 +495,6 @@ namespace FanSelector.UI
 
         private void OnOk(object sender, RoutedEventArgs e)
         {
-            CommitInstanceBox();
-
             double tolerance;
             if (!double.TryParse(ToleranceBox.Text, out tolerance) || tolerance <= 0.0 || tolerance > 100.0)
             {
@@ -434,9 +518,10 @@ namespace FanSelector.UI
             if (incomplete != null)
             {
                 FamilyList.SelectedItem = incomplete;
-                Warn("\"" + incomplete.FamilyName + "\" has no air flow or pressure parameter mapped yet.\n\n"
-                     + "Those two are what the search filters on, so a family without them cannot be used. "
-                     + "Map them, or remove the family from the list.");
+                Warn("\"" + incomplete.FamilyName + "\" is not ready to use yet.\n\n"
+                     + "It needs a type catalogue file, and an air flow and a pressure column mapped from "
+                     + "it — those two are what the search filters on. Finish it, or remove the family "
+                     + "from the list.");
                 return;
             }
 

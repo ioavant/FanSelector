@@ -6,7 +6,7 @@ using Autodesk.Revit.DB;
 
 namespace FanSelector.Core
 {
-    /// <summary>One parameter offered in a mapping dropdown.</summary>
+    /// <summary>One family parameter offered as a "write the figure to" target.</summary>
     internal class ParamChoice
     {
         public string Name { get; set; }
@@ -20,20 +20,19 @@ namespace FanSelector.Core
         /// <summary>Whether each placed fan owns its own value, or the type does.</summary>
         public bool IsInstance { get; set; }
 
-        /// <summary>The "leave this quantity unmapped" entry every dropdown starts with.</summary>
+        /// <summary>The "leave this unmapped" entry every dropdown starts with.</summary>
         public bool IsNone { get; set; }
 
         /// <summary>
-        /// What the dropdown shows: "AirFlow — Air Flow (m³/h), instance". The KIND
-        /// is spelled out, not just the unit: a list full of "A — Length (cm)"
-        /// makes it obvious at a glance that the family carries no air flow, where
-        /// a bare "A — cm" only looks like noise.
+        /// What the dropdown shows: "TES_Pressure — HVAC Pressure (Pa), instance".
+        /// The KIND is spelled out, not just the unit: a list full of
+        /// "A — Length (cm)" makes it obvious that the family has nothing suitable.
         /// </summary>
         public string Label
         {
             get
             {
-                if (IsNone) return "(not mapped)";
+                if (IsNone) return "(not written)";
 
                 string label = Name;
                 if (!string.IsNullOrEmpty(SpecLabel))
@@ -41,7 +40,7 @@ namespace FanSelector.Core
                     label += "  —  " + SpecLabel;
                     if (!string.IsNullOrEmpty(UnitSymbol)) label += " (" + UnitSymbol + ")";
                 }
-                return label + (IsInstance ? ",  instance" : string.Empty);
+                return label + (IsInstance ? ",  instance" : ",  type");
             }
         }
 
@@ -54,10 +53,9 @@ namespace FanSelector.Core
     }
 
     /// <summary>
-    /// Reads what a project actually contains: which fan families are loaded and
-    /// which types they have. Which of their PARAMETERS could carry a performance
-    /// figure is answered from <see cref="FamilyCatalog"/>, because the project
-    /// side cannot see instance parameters at all.
+    /// Puts the two halves of a mapping in front of the user: which columns the
+    /// type catalogue offers to read a figure FROM, and which parameters the
+    /// family offers to write it TO.
     /// </summary>
     internal static class ParameterScanner
     {
@@ -97,48 +95,112 @@ namespace FanSelector.Core
             catch { return new List<FamilySymbol>(); }
         }
 
+        // ── Catalogue columns: where a figure is READ from ─────────────────────
+
         /// <summary>
-        /// Parameters that may carry this quantity. By default only those whose
-        /// spec says so; with <paramref name="showAll"/> every parameter the family
-        /// declares, because an escape hatch that still filters is not one.
+        /// Columns that could carry this figure. By default only those whose
+        /// declared kind fits; with <paramref name="showAll"/> every column,
+        /// because an escape hatch that still filters is not one.
         /// </summary>
-        public static List<ParamChoice> Choices(FamilyCatalog catalog, QuantityInfo quantity,
-                                                bool showAll, Units units)
+        public static List<CatalogColumn> Columns(CatalogFile file, QuantityInfo quantity, bool showAll)
         {
-            if (showAll) return AllChoices(catalog, units);
+            if (file == null || !file.IsUsable) return new List<CatalogColumn>();
+            if (showAll) return file.Columns.ToList();
+            if (quantity == null) return new List<CatalogColumn>();
 
-            var choices = new List<ParamChoice>();
-            if (catalog == null || quantity == null) return choices;
-
-            foreach (CatalogParameter parameter in catalog.Parameters)
-                if (Quantities.AcceptsSpec(quantity, parameter.Spec))
-                    choices.Add(Describe(parameter, units));
-
-            return Sorted(choices);
+            return file.Columns.Where(c => Quantities.AcceptsSpec(quantity, c.Spec)).ToList();
         }
 
-        /// <summary>Every parameter the family declares — the pool for extra display columns.</summary>
-        public static List<ParamChoice> AllChoices(FamilyCatalog catalog, Units units)
+        /// <summary>
+        /// The column most likely to carry this figure: a kind match whose name
+        /// looks right, or the only kind match there is. Null when guessing would
+        /// be a coin toss.
+        /// </summary>
+        public static string GuessColumn(CatalogFile file, QuantityInfo quantity)
+        {
+            List<CatalogColumn> matches = Columns(file, quantity, false);
+
+            foreach (string hint in quantity.NameHints)
+                foreach (CatalogColumn column in matches)
+                    if (column.Name.IndexOf(hint, StringComparison.CurrentCultureIgnoreCase) >= 0)
+                        return column.Name;
+
+            return matches.Count == 1 ? matches[0].Name : null;
+        }
+
+        /// <summary>
+        /// Why a figure has no column to read from, in words the user can act on —
+        /// or null when it does have candidates.
+        /// </summary>
+        public static string DiagnoseColumn(CatalogFile file, QuantityInfo quantity)
+        {
+            if (file == null || !file.IsUsable || quantity == null) return null;
+            if (Columns(file, quantity, false).Count > 0) return null;
+
+            string kind = RevitUnits.SpecLabel(quantity.Specs.FirstOrDefault());
+            if (string.IsNullOrEmpty(kind)) kind = quantity.DisplayName;
+
+            return quantity.DisplayName + ": no column of the catalogue declares a \"" + kind
+                 + "\" value. Either the catalogue does not carry this figure, or its header names a "
+                 + "different kind for it — tick \"Show every column\" to map it anyway.";
+        }
+
+        // ── Family parameters: where a figure is WRITTEN to ────────────────────
+
+        /// <summary>
+        /// Parameters of the family a figure could be written to. Instance
+        /// parameters first in spirit — they are the ones that normally matter —
+        /// but the list is alphabetical and each entry says which it is.
+        /// </summary>
+        public static List<ParamChoice> Params(FamilyCatalog catalog, QuantityInfo quantity,
+                                               bool showAll, Units units)
         {
             var choices = new List<ParamChoice>();
-            if (catalog == null) return choices;
+            if (catalog == null || !catalog.IsUsable) return choices;
 
             foreach (CatalogParameter parameter in catalog.Parameters)
+            {
+                if (parameter.IsReadOnly) continue;
+                if (!showAll && !Quantities.AcceptsSpec(quantity, parameter.Spec)) continue;
                 choices.Add(Describe(parameter, units));
+            }
 
             return Sorted(choices);
         }
 
-        /// <summary>Only the instance parameters, for the optional "write onto the instance" mapping.</summary>
-        public static List<ParamChoice> InstanceChoices(FamilyCatalog catalog, Units units)
+        /// <summary>Every writable parameter, whatever its kind.</summary>
+        public static List<ParamChoice> AllParams(FamilyCatalog catalog, Units units)
         {
             var choices = new List<ParamChoice>();
-            if (catalog == null) return choices;
+            if (catalog == null || !catalog.IsUsable) return choices;
 
             foreach (CatalogParameter parameter in catalog.Parameters)
-                if (parameter.IsInstance) choices.Add(Describe(parameter, units));
+                if (!parameter.IsReadOnly) choices.Add(Describe(parameter, units));
 
             return Sorted(choices);
+        }
+
+        /// <summary>
+        /// The parameter most likely to be meant for this figure. Prefers an
+        /// instance parameter, because a type parameter would be shared by every
+        /// fan of that type and writing one is almost never the intent.
+        /// </summary>
+        public static string GuessParam(FamilyCatalog catalog, QuantityInfo quantity, Units units)
+        {
+            List<ParamChoice> matches = Params(catalog, quantity, false, units);
+            if (matches.Count == 0) return null;
+
+            foreach (string hint in quantity.NameHints)
+            {
+                ParamChoice named = matches.FirstOrDefault(
+                    c => c.Name.IndexOf(hint, StringComparison.CurrentCultureIgnoreCase) >= 0);
+                if (named != null) return named.Name;
+            }
+
+            ParamChoice onInstance = matches.FirstOrDefault(c => c.IsInstance);
+            if (onInstance != null) return onInstance.Name;
+
+            return matches.Count == 1 ? matches[0].Name : null;
         }
 
         private static ParamChoice Describe(CatalogParameter parameter, Units units)
@@ -152,97 +214,71 @@ namespace FanSelector.Core
             };
         }
 
-        /// <summary>
-        /// The parameter most likely to carry this quantity: a spec match whose
-        /// name looks right, or — failing that — the only spec match there is.
-        /// Returns null when guessing would be a coin toss.
-        /// </summary>
-        public static string Guess(FamilyCatalog catalog, QuantityInfo quantity)
-        {
-            if (catalog == null || quantity == null) return null;
-
-            List<string> specMatches = Matching(catalog, quantity);
-
-            foreach (string hint in quantity.NameHints)
-                foreach (string name in specMatches)
-                    if (name.IndexOf(hint, StringComparison.CurrentCultureIgnoreCase) >= 0)
-                        return name;
-
-            return specMatches.Count == 1 ? specMatches[0] : null;
-        }
+        // ── Diagnostics ───────────────────────────────────────────────────────
 
         /// <summary>
-        /// Why a quantity has nothing to map to, in words the user can act on — or
-        /// null when it does have candidates.
+        /// Both halves of the picture as plain text, for the "Copy details" button:
+        /// the catalogue's columns and first rows, and the family's parameters.
+        /// When a mapping cannot be made, this is what makes it answerable.
         /// </summary>
-        public static string Diagnose(FamilyCatalog catalog, QuantityInfo quantity)
-        {
-            if (catalog == null || !catalog.IsUsable || quantity == null) return null;
-            if (Matching(catalog, quantity).Count > 0) return null;
-
-            string kind = RevitUnits.SpecLabel(quantity.Specs.FirstOrDefault());
-            if (string.IsNullOrEmpty(kind)) kind = quantity.DisplayName;
-
-            return quantity.DisplayName + ": no parameter of this family — type or instance — holds a \""
-                 + kind + "\" value. Either the family carries no such data, or it keeps it in a parameter "
-                 + "of another kind; tick \"Show every parameter\" to see all of them.";
-        }
-
-        private static List<string> Matching(FamilyCatalog catalog, QuantityInfo quantity)
-        {
-            return catalog.Parameters
-                .Where(p => Quantities.AcceptsSpec(quantity, p.Spec))
-                .Select(p => p.Name)
-                .ToList();
-        }
-
-        /// <summary>
-        /// The whole picture for one family as plain text, for the "Copy parameter
-        /// list" button: every parameter with its kind and whether it is per type
-        /// or per instance, then the values of the first few types.
-        /// </summary>
-        public static string Dump(Document doc, FamilyCatalog catalog, Units units)
+        public static string Dump(Document doc, FamilyMapping mapping, CatalogFile file,
+                                 FamilyCatalog catalog, Units units)
         {
             var text = new StringBuilder();
-            text.AppendLine("Family: " + (catalog == null ? "(none)" : catalog.FamilyName));
+            text.AppendLine("Family: " + (mapping == null ? "(none)" : mapping.FamilyName));
+            text.AppendLine("Catalogue: " + (mapping == null ? "(none)" : mapping.CatalogPath));
+            if (mapping != null)
+                text.AppendLine("Types loaded in this project: "
+                                + SymbolsOf(doc, mapping.FamilyName).Count);
+            text.AppendLine();
 
+            text.AppendLine("=== CATALOGUE (where figures are read from) ===");
+            if (file == null || !file.IsUsable)
+            {
+                text.AppendLine("Not usable: " + (file == null ? "no file" : file.Problem));
+            }
+            else
+            {
+                text.AppendLine("Rows: " + file.Rows.Count
+                                + (file.SkippedLines > 0 ? "   skipped lines: " + file.SkippedLines : ""));
+                text.AppendLine("column | kind token | unit token | kind understood | unit understood");
+                foreach (CatalogColumn column in file.Columns)
+                    text.AppendLine(string.Join(" | ",
+                        column.Name,
+                        column.SpecToken,
+                        column.UnitToken,
+                        column.Spec == null ? "(none)" : RevitUnits.SpecLabel(column.Spec),
+                        column.UnitUnderstood ? "yes" : "NO - value taken as written"));
+
+                text.AppendLine();
+                text.AppendLine("First rows, as written in the file:");
+                foreach (CatalogRow row in file.Rows.Take(4))
+                {
+                    text.AppendLine("  [" + row.TypeName + "]  "
+                        + string.Join("  ", row.Raw.Select(p => p.Key + "=" + p.Value).ToArray()));
+                }
+                if (file.Rows.Count > 4) text.AppendLine("  ... and " + (file.Rows.Count - 4) + " more.");
+            }
+
+            text.AppendLine();
+            text.AppendLine("=== FAMILY PARAMETERS (where figures are written to) ===");
             if (catalog == null || !catalog.IsUsable)
             {
-                text.AppendLine("Could not be read: " + (catalog == null ? "no catalogue" : catalog.Problem));
-                return text.ToString();
+                text.AppendLine("Not readable: " + (catalog == null ? "no family" : catalog.Problem));
             }
-
-            int loaded = SymbolsOf(doc, catalog.FamilyName).Count;
-            text.AppendLine("Types in the family: " + catalog.Rows.Count
-                            + "   |   types loaded in this project: " + loaded);
-            text.AppendLine();
-
-            text.AppendLine("PARAMETERS");
-            text.AppendLine("name | kind | unit | storage | type or instance");
-            foreach (CatalogParameter parameter in catalog.Parameters
-                         .OrderBy(p => p.Name, StringComparer.CurrentCultureIgnoreCase))
+            else
             {
-                text.AppendLine(string.Join(" | ",
-                    parameter.Name,
-                    RevitUnits.SpecLabel(parameter.Spec),
-                    RevitUnits.Symbol(units, parameter.Spec),
-                    parameter.Storage.ToString(),
-                    parameter.IsInstance ? "instance" : "type"));
+                text.AppendLine("name | kind | unit | storage | type or instance | writable");
+                foreach (CatalogParameter parameter in catalog.Parameters
+                             .OrderBy(p => p.Name, StringComparer.CurrentCultureIgnoreCase))
+                    text.AppendLine(string.Join(" | ",
+                        parameter.Name,
+                        RevitUnits.SpecLabel(parameter.Spec),
+                        RevitUnits.Symbol(units, parameter.Spec),
+                        parameter.Storage.ToString(),
+                        parameter.IsInstance ? "instance" : "type",
+                        parameter.IsReadOnly ? "read-only" : "writable"));
             }
-
-            text.AppendLine();
-            text.AppendLine("VALUES OF THE FIRST TYPES  (parameter = value, blank ones omitted)");
-            foreach (CatalogRow row in catalog.Rows.Take(5))
-            {
-                text.AppendLine();
-                text.AppendLine("[" + row.TypeName + "]");
-                foreach (var pair in row.Texts.OrderBy(p => p.Key, StringComparer.CurrentCultureIgnoreCase))
-                    text.AppendLine("  " + pair.Key + " = " + pair.Value);
-            }
-            if (catalog.Rows.Count > 5)
-                text.AppendLine();
-            if (catalog.Rows.Count > 5)
-                text.AppendLine("... and " + (catalog.Rows.Count - 5) + " more types.");
 
             return text.ToString();
         }

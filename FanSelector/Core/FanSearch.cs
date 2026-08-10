@@ -17,8 +17,11 @@ namespace FanSelector.Core
     {
         public List<FanCandidate> Candidates { get; set; }
 
-        /// <summary>How many types of the family were looked at, matched or not.</summary>
-        public int TypesExamined { get; set; }
+        /// <summary>How many catalogue rows were looked at, matched or not.</summary>
+        public int RowsExamined { get; set; }
+
+        /// <summary>How many of the matches are not loaded in this project yet.</summary>
+        public int NotLoaded { get; set; }
 
         /// <summary>
         /// Why an empty result is empty, when the reason is something other than
@@ -33,30 +36,30 @@ namespace FanSelector.Core
     }
 
     /// <summary>
-    /// The selection itself: read every loaded type of the chosen family through
-    /// the user's parameter mapping, keep the ones within tolerance of the
-    /// requested duty, and rank them.
+    /// The selection itself: read the type catalogue through the user's column
+    /// mapping, keep the rows within tolerance of the requested duty, and rank
+    /// them.
     ///
-    /// Values come from the family's own catalogue (see <see cref="FamilyCatalog"/>),
-    /// not from the FamilySymbol, so a family that declares air flow and pressure
-    /// as instance parameters works exactly like one that declares them per type.
+    /// The catalogue is the database. Nothing is read from the project except
+    /// which types happen to be loaded already, and that only decides whether
+    /// placing a row has to load it first.
     /// </summary>
     internal static class FanSearch
     {
         /// <summary>
-        /// The spec of the parameter a quantity is mapped to, so the caller can
-        /// format and parse in exactly the units that parameter uses. Null when
-        /// the quantity is unmapped or the family cannot be read.
+        /// The spec of the catalogue column a quantity is read from, so the caller
+        /// can format and parse in the units that column declares. Null when the
+        /// quantity is unmapped or the catalogue cannot be read.
         /// </summary>
-        public static ForgeTypeId SpecFor(Document doc, FamilyMapping mapping, FanQuantity quantity)
+        public static ForgeTypeId SpecFor(FamilyMapping mapping, FanQuantity quantity)
         {
             if (mapping == null) return null;
 
-            FamilyCatalog catalog = FamilyCatalog.For(doc, mapping.FamilyName);
-            if (!catalog.IsUsable) return null;
+            CatalogFile file = CatalogFile.For(mapping.CatalogPath);
+            if (!file.IsUsable) return null;
 
-            CatalogParameter parameter = catalog.Find(mapping.Get(quantity));
-            return parameter == null ? null : parameter.Spec;
+            CatalogColumn column = file.Column(mapping.Column(quantity));
+            return column == null ? null : column.Spec;
         }
 
         public static SearchResult Run(Document doc, FamilyMapping mapping,
@@ -66,79 +69,109 @@ namespace FanSelector.Core
             var result = new SearchResult();
             if (mapping == null || !mapping.IsUsable)
             {
-                result.Note = "This family has no air flow / pressure mapping yet. Open Options to set one up.";
+                result.Note = "This family has no catalogue file, or no air flow / pressure column mapped. "
+                            + "Open Options to set it up.";
                 return result;
             }
 
-            FamilyCatalog catalog = FamilyCatalog.For(doc, mapping.FamilyName);
-            if (!catalog.IsUsable)
+            CatalogFile file = CatalogFile.For(mapping.CatalogPath);
+            if (!file.IsUsable)
             {
-                result.Note = catalog.Problem;
+                result.Note = file.Problem;
                 return result;
             }
 
-            List<FamilySymbol> symbols = ParameterScanner.SymbolsOf(doc, mapping.FamilyName);
-            result.TypesExamined = symbols.Count;
-            if (symbols.Count == 0)
-            {
-                result.Note = "The family \"" + mapping.FamilyName +
-                              "\" is not loaded in this project. Load it, or pick another family.";
-                return result;
-            }
-
+            Dictionary<string, FamilySymbol> loaded = LoadedTypes(doc, mapping.FamilyName);
+            Units units = doc.GetUnits();
             double tolerance = Math.Max(tolerancePercent, 0.0) / 100.0;
             int unreadable = 0;
 
-            foreach (FamilySymbol symbol in symbols)
+            foreach (CatalogRow row in file.Rows)
             {
-                CatalogRow row = catalog.Row(symbol.Name);
-                if (row == null) { unreadable++; continue; }
+                result.RowsExamined++;
 
-                double? airFlow = row.Number(mapping.AirFlow);
-                double? pressure = row.Number(mapping.Pressure);
+                double? airFlow = row.Number(mapping.AirFlowColumn);
+                double? pressure = row.Number(mapping.PressureColumn);
                 if (!airFlow.HasValue || !pressure.HasValue) { unreadable++; continue; }
 
                 double deviation = Math.Max(Relative(airFlow.Value, targetAirFlow),
                                             Relative(pressure.Value, targetPressure));
                 if (deviation > tolerance) continue;
 
-                result.Candidates.Add(Build(symbol, row, mapping, airFlow.Value, pressure.Value, deviation));
+                FamilySymbol symbol;
+                loaded.TryGetValue(row.TypeName, out symbol);
+                result.Candidates.Add(Build(row, symbol, mapping, file, units,
+                                            airFlow.Value, pressure.Value, deviation));
             }
 
-            if (result.Candidates.Count == 0 && unreadable == symbols.Count)
-                result.Note = "None of the " + symbols.Count + " loaded types of \"" + mapping.FamilyName +
-                              "\" has a value in both mapped parameters. Check the mapping in Options — "
-                              + "\"Copy parameter list\" there shows what each type actually holds.";
+            result.NotLoaded = result.Candidates.Count(c => !c.IsLoaded);
+
+            if (result.Candidates.Count == 0 && unreadable == result.RowsExamined && unreadable > 0)
+                result.Note = "None of the " + unreadable + " rows in the catalogue has a number in both "
+                            + "mapped columns. Check which columns are mapped in Options — \""
+                            + mapping.AirFlowColumn + "\" and \"" + mapping.PressureColumn + "\" were used.";
 
             Sort(result.Candidates, sort);
             return result;
         }
 
-        private static FanCandidate Build(FamilySymbol symbol, CatalogRow row, FamilyMapping mapping,
+        /// <summary>Types of the family already in this project, by type name.</summary>
+        private static Dictionary<string, FamilySymbol> LoadedTypes(Document doc, string familyName)
+        {
+            var map = new Dictionary<string, FamilySymbol>(StringComparer.OrdinalIgnoreCase);
+            foreach (FamilySymbol symbol in ParameterScanner.SymbolsOf(doc, familyName))
+                if (!map.ContainsKey(symbol.Name)) map[symbol.Name] = symbol;
+            return map;
+        }
+
+        private static FanCandidate Build(CatalogRow row, FamilySymbol symbol, FamilyMapping mapping,
+                                          CatalogFile file, Units units,
                                           double airFlow, double pressure, double deviation)
         {
             var candidate = new FanCandidate
             {
+                TypeName = row.TypeName,
                 Symbol = symbol,
-                TypeName = symbol.Name,
                 AirFlow = airFlow,
                 Pressure = pressure,
-                AirFlowText = row.Text(mapping.AirFlow),
-                PressureText = row.Text(mapping.Pressure),
-                PowerText = row.Text(mapping.Power),
-                SpeedText = row.Text(mapping.Speed),
-                SfpText = row.Text(mapping.Sfp),
-                SoundText = row.Text(mapping.SoundPower),
-                PowerValue = row.Number(mapping.Power),
-                SfpValue = row.Number(mapping.Sfp),
-                SoundValue = row.Number(mapping.SoundPower),
+                AirFlowText = Display(row, file, units, mapping.AirFlowColumn),
+                PressureText = Display(row, file, units, mapping.PressureColumn),
+                PowerText = Display(row, file, units, mapping.PowerColumn),
+                SpeedText = Display(row, file, units, mapping.SpeedColumn),
+                SfpText = Display(row, file, units, mapping.SfpColumn),
+                SoundText = Display(row, file, units, mapping.SoundPowerColumn),
+                PowerValue = row.Number(mapping.PowerColumn),
+                SfpValue = row.Number(mapping.SfpColumn),
+                SoundValue = row.Number(mapping.SoundPowerColumn),
                 Deviation = deviation
             };
+
+            foreach (FanQuantity quantity in Enum.GetValues(typeof(FanQuantity)).Cast<FanQuantity>())
+            {
+                double? value = row.Number(mapping.Column(quantity));
+                if (value.HasValue) candidate.Values[quantity] = value.Value;
+            }
 
             foreach (string extra in mapping.ExtraColumns)
                 candidate.Extras.Add(row.Text(extra));
 
             return candidate;
+        }
+
+        /// <summary>
+        /// A catalogue value the way the project would show it. Falls back to the
+        /// file's own text for a column whose unit Revit does not recognise, which
+        /// is better than pretending to know what it means.
+        /// </summary>
+        private static string Display(CatalogRow row, CatalogFile file, Units units, string columnName)
+        {
+            if (string.IsNullOrEmpty(columnName)) return string.Empty;
+
+            CatalogColumn column = file.Column(columnName);
+            double? value = row.Number(columnName);
+            if (column == null || column.Spec == null || !value.HasValue) return row.Text(columnName);
+
+            return RevitUnits.Format(units, column.Spec, value.Value);
         }
 
         /// <summary>
@@ -152,7 +185,7 @@ namespace FanSelector.Core
             return Math.Abs(actual - target) / Math.Abs(target);
         }
 
-        // Types with no value for the sort key go last rather than first, which is
+        // Rows with no value for the sort key go last rather than first, which is
         // what ordering nulls naturally would do and is never what the user meant.
         private static void Sort(List<FanCandidate> candidates, FanSort sort)
         {

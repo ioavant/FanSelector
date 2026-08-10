@@ -5,11 +5,18 @@ using System.Runtime.Serialization;
 namespace FanSelector.Core
 {
     /// <summary>
-    /// Which parameter of one fan family carries which performance figure.
+    /// How one fan family is wired up, in two halves.
     ///
-    /// This is the whole reason the add-in works with anybody's families: it
-    /// stores parameter NAMES chosen by the user, so nothing about a particular
-    /// manufacturer's naming is compiled in.
+    /// READ — which column of the type catalogue (.csv) carries each figure. That
+    /// file is the performance database: it is the same file Revit reads to decide
+    /// which types the family offers, so the two can never drift apart.
+    ///
+    /// WRITE — which parameter of the family each figure should be written to when
+    /// a fan is placed. Optional, and needed because fan families normally keep
+    /// these as instance parameters that hold no value until something fills them.
+    ///
+    /// Both halves are names chosen by the user, so no manufacturer's naming is
+    /// compiled into the add-in.
     /// </summary>
     [DataContract]
     internal class FamilyMapping
@@ -17,39 +24,38 @@ namespace FanSelector.Core
         [DataMember(Name = "family", Order = 0)]
         public string FamilyName { get; set; }
 
-        [DataMember(Name = "airFlow", Order = 1)]
-        public string AirFlow { get; set; }
+        /// <summary>
+        /// Full path to the type catalogue. The family's .rfa is expected beside it
+        /// under the same name, which is what Revit itself requires of a catalogue.
+        /// </summary>
+        [DataMember(Name = "catalog", Order = 1)]
+        public string CatalogPath { get; set; }
 
-        [DataMember(Name = "pressure", Order = 2)]
-        public string Pressure { get; set; }
+        // ── Catalogue columns the figures are read from ────────────────────────
 
-        [DataMember(Name = "power", Order = 3)]
-        public string Power { get; set; }
+        [DataMember(Name = "airFlowColumn", Order = 2)] public string AirFlowColumn { get; set; }
+        [DataMember(Name = "pressureColumn", Order = 3)] public string PressureColumn { get; set; }
+        [DataMember(Name = "powerColumn", Order = 4)] public string PowerColumn { get; set; }
+        [DataMember(Name = "speedColumn", Order = 5)] public string SpeedColumn { get; set; }
+        [DataMember(Name = "sfpColumn", Order = 6)] public string SfpColumn { get; set; }
+        [DataMember(Name = "soundPowerColumn", Order = 7)] public string SoundPowerColumn { get; set; }
 
-        [DataMember(Name = "speed", Order = 4)]
-        public string Speed { get; set; }
+        // ── Family parameters the figures are written to ───────────────────────
 
-        [DataMember(Name = "sfp", Order = 5)]
-        public string Sfp { get; set; }
-
-        [DataMember(Name = "soundPower", Order = 6)]
-        public string SoundPower { get; set; }
+        [DataMember(Name = "airFlowParam", Order = 8)] public string AirFlowParam { get; set; }
+        [DataMember(Name = "pressureParam", Order = 9)] public string PressureParam { get; set; }
+        [DataMember(Name = "powerParam", Order = 10)] public string PowerParam { get; set; }
+        [DataMember(Name = "speedParam", Order = 11)] public string SpeedParam { get; set; }
+        [DataMember(Name = "sfpParam", Order = 12)] public string SfpParam { get; set; }
+        [DataMember(Name = "soundPowerParam", Order = 13)] public string SoundPowerParam { get; set; }
 
         /// <summary>
-        /// Extra type parameters shown as further columns in the results grid.
+        /// Extra catalogue columns shown as further columns in the results grid.
         /// They take no part in filtering — they are there because the person
         /// choosing a fan wants to see them next to the numbers.
         /// </summary>
-        [DataMember(Name = "extraColumns", Order = 7)]
+        [DataMember(Name = "extraColumns", Order = 14)]
         public List<string> ExtraColumns { get; set; }
-
-        /// <summary>
-        /// Optional INSTANCE parameter the selected air flow is written to after
-        /// placement. Families that drive a connector from an instance override
-        /// need this; families that read air flow off the type do not.
-        /// </summary>
-        [DataMember(Name = "instanceAirFlow", Order = 8)]
-        public string InstanceAirFlow { get; set; }
 
         public FamilyMapping()
         {
@@ -62,31 +68,60 @@ namespace FanSelector.Core
             if (ExtraColumns == null) ExtraColumns = new List<string>();
         }
 
-        public string Get(FanQuantity quantity)
+        public string Column(FanQuantity quantity)
         {
             switch (quantity)
             {
-                case FanQuantity.AirFlow: return AirFlow;
-                case FanQuantity.Pressure: return Pressure;
-                case FanQuantity.Power: return Power;
-                case FanQuantity.Speed: return Speed;
-                case FanQuantity.Sfp: return Sfp;
-                case FanQuantity.SoundPower: return SoundPower;
+                case FanQuantity.AirFlow: return AirFlowColumn;
+                case FanQuantity.Pressure: return PressureColumn;
+                case FanQuantity.Power: return PowerColumn;
+                case FanQuantity.Speed: return SpeedColumn;
+                case FanQuantity.Sfp: return SfpColumn;
+                case FanQuantity.SoundPower: return SoundPowerColumn;
                 default: throw new ArgumentOutOfRangeException("quantity");
             }
         }
 
-        public void Set(FanQuantity quantity, string parameterName)
+        public void SetColumn(FanQuantity quantity, string columnName)
+        {
+            string value = string.IsNullOrEmpty(columnName) ? null : columnName;
+            switch (quantity)
+            {
+                case FanQuantity.AirFlow: AirFlowColumn = value; break;
+                case FanQuantity.Pressure: PressureColumn = value; break;
+                case FanQuantity.Power: PowerColumn = value; break;
+                case FanQuantity.Speed: SpeedColumn = value; break;
+                case FanQuantity.Sfp: SfpColumn = value; break;
+                case FanQuantity.SoundPower: SoundPowerColumn = value; break;
+                default: throw new ArgumentOutOfRangeException("quantity");
+            }
+        }
+
+        public string Param(FanQuantity quantity)
+        {
+            switch (quantity)
+            {
+                case FanQuantity.AirFlow: return AirFlowParam;
+                case FanQuantity.Pressure: return PressureParam;
+                case FanQuantity.Power: return PowerParam;
+                case FanQuantity.Speed: return SpeedParam;
+                case FanQuantity.Sfp: return SfpParam;
+                case FanQuantity.SoundPower: return SoundPowerParam;
+                default: throw new ArgumentOutOfRangeException("quantity");
+            }
+        }
+
+        public void SetParam(FanQuantity quantity, string parameterName)
         {
             string value = string.IsNullOrEmpty(parameterName) ? null : parameterName;
             switch (quantity)
             {
-                case FanQuantity.AirFlow: AirFlow = value; break;
-                case FanQuantity.Pressure: Pressure = value; break;
-                case FanQuantity.Power: Power = value; break;
-                case FanQuantity.Speed: Speed = value; break;
-                case FanQuantity.Sfp: Sfp = value; break;
-                case FanQuantity.SoundPower: SoundPower = value; break;
+                case FanQuantity.AirFlow: AirFlowParam = value; break;
+                case FanQuantity.Pressure: PressureParam = value; break;
+                case FanQuantity.Power: PowerParam = value; break;
+                case FanQuantity.Speed: SpeedParam = value; break;
+                case FanQuantity.Sfp: SfpParam = value; break;
+                case FanQuantity.SoundPower: SoundPowerParam = value; break;
                 default: throw new ArgumentOutOfRangeException("quantity");
             }
         }
@@ -96,8 +131,9 @@ namespace FanSelector.Core
             get
             {
                 return !string.IsNullOrEmpty(FamilyName)
-                    && !string.IsNullOrEmpty(AirFlow)
-                    && !string.IsNullOrEmpty(Pressure);
+                    && !string.IsNullOrEmpty(CatalogPath)
+                    && !string.IsNullOrEmpty(AirFlowColumn)
+                    && !string.IsNullOrEmpty(PressureColumn);
             }
         }
 
@@ -106,13 +142,19 @@ namespace FanSelector.Core
             return new FamilyMapping
             {
                 FamilyName = FamilyName,
-                AirFlow = AirFlow,
-                Pressure = Pressure,
-                Power = Power,
-                Speed = Speed,
-                Sfp = Sfp,
-                SoundPower = SoundPower,
-                InstanceAirFlow = InstanceAirFlow,
+                CatalogPath = CatalogPath,
+                AirFlowColumn = AirFlowColumn,
+                PressureColumn = PressureColumn,
+                PowerColumn = PowerColumn,
+                SpeedColumn = SpeedColumn,
+                SfpColumn = SfpColumn,
+                SoundPowerColumn = SoundPowerColumn,
+                AirFlowParam = AirFlowParam,
+                PressureParam = PressureParam,
+                PowerParam = PowerParam,
+                SpeedParam = SpeedParam,
+                SfpParam = SfpParam,
+                SoundPowerParam = SoundPowerParam,
                 ExtraColumns = new List<string>(ExtraColumns ?? new List<string>())
             };
         }

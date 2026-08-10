@@ -30,6 +30,21 @@ namespace FanSelector.Core
 
         public const double DefaultTolerancePercent = 10.0;
 
+        /// <summary>
+        /// UTF-8 WITHOUT a byte-order mark. File.WriteAllText(..., Encoding.UTF8)
+        /// prepends one, and DataContractJsonSerializer.ReadObject rejects it
+        /// outright ("Encountered unexpected character 'ï'") — which is how every
+        /// saved mapping silently came back empty until this was found.
+        /// </summary>
+        private static readonly Encoding Utf8NoBom = new UTF8Encoding(false);
+
+        /// <summary>
+        /// Why the last load failed, or null. Loading falls back to defaults on a
+        /// bad file, and without this the fallback is indistinguishable from
+        /// "nothing was ever saved".
+        /// </summary>
+        public static string LastLoadError { get; private set; }
+
         [DataMember(Name = "tolerancePercent", Order = 0)]
         public double TolerancePercent { get; set; }
 
@@ -146,6 +161,7 @@ namespace FanSelector.Core
         /// <summary>The stored options, or the defaults. Never throws.</summary>
         public static FanSettings Load()
         {
+            LastLoadError = null;
             return ReadFrom(UserPath) ?? ReadFrom(SharedPath) ?? new FanSettings();
         }
 
@@ -177,13 +193,26 @@ namespace FanSelector.Core
             try
             {
                 if (!File.Exists(path)) return null;
-                using (FileStream stream = File.OpenRead(path))
+
+                // Skip a byte-order mark rather than choke on one: files written by
+                // the version that added one are still out there, and a text editor
+                // may well put one back.
+                byte[] bytes = File.ReadAllBytes(path);
+                int start = bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF
+                    ? 3 : 0;
+
+                using (var stream = new MemoryStream(bytes, start, bytes.Length - start))
                 {
                     var serializer = new DataContractJsonSerializer(typeof(FanSettings));
                     return serializer.ReadObject(stream) as FanSettings;
                 }
             }
-            catch { return null; }
+            catch (Exception exception)
+            {
+                LastLoadError = "The settings file could not be read, so the defaults are in use:\n"
+                              + path + "\n\n" + exception.Message;
+                return null;
+            }
         }
 
         private bool TryWrite(string path)
@@ -194,7 +223,7 @@ namespace FanSelector.Core
                 string dir = Path.GetDirectoryName(path);
                 if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
                     Directory.CreateDirectory(dir);
-                File.WriteAllText(path, ToJson(), Encoding.UTF8);
+                File.WriteAllText(path, ToJson(), Utf8NoBom);
                 return true;
             }
             catch { return false; }

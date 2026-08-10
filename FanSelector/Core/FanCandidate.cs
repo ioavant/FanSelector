@@ -3,18 +3,29 @@ using Autodesk.Revit.DB;
 
 namespace FanSelector.Core
 {
-    /// <summary>One family type that matched the search, ready to show in the grid.</summary>
+    /// <summary>One catalogue row that matched the search, ready to show in the grid.</summary>
     internal class FanCandidate
     {
-        public FamilySymbol Symbol { get; set; }
-
-        /// <summary>The type name — a fan's designation is its Revit type name.</summary>
+        /// <summary>The family type this row names — the catalogue's first cell.</summary>
         public string TypeName { get; set; }
 
-        // Internal units, used for ranking only. Everything shown to the user is
-        // the *Text property beside it, already formatted in project units.
+        /// <summary>
+        /// The type as loaded in the project, or null when it is in the catalogue
+        /// but not in this model yet. Placing such a row loads that one type.
+        /// </summary>
+        public FamilySymbol Symbol { get; set; }
+
+        public bool IsLoaded { get { return Symbol != null; } }
+
+        /// <summary>Shown in the grid so it is clear which rows are already in the model.</summary>
+        public string LoadedText { get { return Symbol != null ? "yes" : "on insert"; } }
+
+        // Internal units, used for ranking and for writing onto the placed fan.
         public double AirFlow { get; set; }
         public double Pressure { get; set; }
+
+        /// <summary>Every mapped figure that had a value, in internal units.</summary>
+        public Dictionary<FanQuantity, double> Values { get; private set; }
 
         public string AirFlowText { get; set; }
         public string PressureText { get; set; }
@@ -23,13 +34,13 @@ namespace FanSelector.Core
         public string SfpText { get; set; }
         public string SoundText { get; set; }
 
-        /// <summary>Sort keys for the optional quantities; null when unmapped or blank.</summary>
+        /// <summary>Sort keys for the optional figures; null when unmapped or blank.</summary>
         public double? PowerValue { get; set; }
         public double? SfpValue { get; set; }
         public double? SoundValue { get; set; }
 
         /// <summary>Values of the user's extra display columns, in mapping order.</summary>
-        public List<string> Extras { get; set; }
+        public List<string> Extras { get; private set; }
 
         /// <summary>
         /// How far this type is from what was asked for: the larger of the two
@@ -44,6 +55,7 @@ namespace FanSelector.Core
 
         public FanCandidate()
         {
+            Values = new Dictionary<FanQuantity, double>();
             Extras = new List<string>();
         }
     }

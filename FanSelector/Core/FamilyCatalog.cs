@@ -11,61 +11,29 @@ namespace FanSelector.Core
         public string Name { get; set; }
 
         /// <summary>
-        /// True for a parameter each placed instance owns. Fan families very often
-        /// declare their performance figures this way, which is why the catalogue
-        /// below has to exist at all: an instance parameter is invisible on a
-        /// FamilySymbol, so it cannot be read from the project side.
+        /// True for a parameter each placed instance owns. This is the reason the
+        /// list has to come from the family definition at all: an instance
+        /// parameter does not exist on a FamilySymbol, so the project side cannot
+        /// see it — and fan families routinely declare their performance figures
+        /// exactly that way.
         /// </summary>
         public bool IsInstance { get; set; }
 
         public ForgeTypeId Spec { get; set; }
         public StorageType Storage { get; set; }
-    }
-
-    /// <summary>The values one family type holds, keyed by parameter name.</summary>
-    internal class CatalogRow
-    {
-        public string TypeName { get; set; }
-
-        /// <summary>Numeric values in Revit's internal units.</summary>
-        public Dictionary<string, double> Numbers { get; private set; }
-
-        /// <summary>Values formatted in the project's units, for display.</summary>
-        public Dictionary<string, string> Texts { get; private set; }
-
-        public CatalogRow()
-        {
-            Numbers = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
-            Texts = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        }
-
-        public double? Number(string parameterName)
-        {
-            double value;
-            return parameterName != null && Numbers.TryGetValue(parameterName, out value)
-                ? (double?)value : null;
-        }
-
-        public string Text(string parameterName)
-        {
-            string value;
-            return parameterName != null && Texts.TryGetValue(parameterName, out value)
-                ? value : string.Empty;
-        }
+        public bool IsReadOnly { get; set; }
     }
 
     /// <summary>
-    /// Everything one fan family knows about its own types, read from the family
-    /// document rather than from the project.
+    /// The parameters one fan family declares, read from the family definition.
     ///
-    /// The project side only exposes TYPE parameters of a loaded FamilySymbol.
-    /// Fan families routinely declare air flow, pressure and motor power as
-    /// INSTANCE parameters with a per-type default, and those defaults are what a
-    /// selection tool has to compare — they exist only inside the family. Reading
-    /// them means opening the family with Document.EditFamily and going through
-    /// FamilyManager, which sees type and instance parameters alike.
+    /// Only the parameter LIST comes from here — the performance values come from
+    /// the type catalogue (see <see cref="CatalogFile"/>). What this is for is the
+    /// other half of a mapping: which parameter of the family each figure should
+    /// be WRITTEN to when a fan is placed.
     ///
-    /// That is not cheap, so a catalogue is read once and cached for the session.
+    /// Reading it means opening the family with Document.EditFamily, which is not
+    /// cheap, so a family is read once and cached for the session.
     /// </summary>
     internal class FamilyCatalog
     {
@@ -74,7 +42,6 @@ namespace FanSelector.Core
 
         public string FamilyName { get; private set; }
         public List<CatalogParameter> Parameters { get; private set; }
-        public List<CatalogRow> Rows { get; private set; }
 
         /// <summary>Why the family could not be read, or null when it was.</summary>
         public string Problem { get; private set; }
@@ -84,7 +51,6 @@ namespace FanSelector.Core
         private FamilyCatalog()
         {
             Parameters = new List<CatalogParameter>();
-            Rows = new List<CatalogRow>();
         }
 
         public CatalogParameter Find(string parameterName)
@@ -94,15 +60,8 @@ namespace FanSelector.Core
                 p => string.Equals(p.Name, parameterName, StringComparison.OrdinalIgnoreCase));
         }
 
-        public CatalogRow Row(string typeName)
-        {
-            if (string.IsNullOrEmpty(typeName)) return null;
-            return Rows.FirstOrDefault(
-                r => string.Equals(r.TypeName, typeName, StringComparison.OrdinalIgnoreCase));
-        }
-
         /// <summary>
-        /// The catalogue for one family, read once per session. Never throws:
+        /// The parameters of one family, read once per session. Never throws:
         /// a family that cannot be opened comes back with Problem set.
         /// </summary>
         public static FamilyCatalog For(Document doc, string familyName)
@@ -158,7 +117,7 @@ namespace FanSelector.Core
             catch (Exception exception)
             {
                 return Failed(familyName,
-                    "The family \"" + familyName + "\" could not be opened to read its types: "
+                    "The family \"" + familyName + "\" could not be opened to read its parameters: "
                     + exception.Message
                     + "\n\nIf the family is open in another window, close it and try again.");
             }
@@ -181,56 +140,19 @@ namespace FanSelector.Core
             if (manager == null)
                 return Failed(familyName, "The family has no parameter definitions.");
 
-            var parameters = new List<FamilyParameter>();
             foreach (FamilyParameter parameter in manager.Parameters)
             {
                 if (parameter == null || parameter.Definition == null) continue;
                 if (string.IsNullOrEmpty(parameter.Definition.Name)) continue;
 
-                parameters.Add(parameter);
                 catalog.Parameters.Add(new CatalogParameter
                 {
                     Name = parameter.Definition.Name,
                     IsInstance = parameter.IsInstance,
                     Spec = SpecOf(parameter),
-                    Storage = parameter.StorageType
+                    Storage = parameter.StorageType,
+                    IsReadOnly = parameter.IsReadOnly
                 });
-            }
-
-            foreach (FamilyType type in manager.Types)
-            {
-                // A family with no named types still reports one with an empty
-                // name; it is not something the user can place.
-                if (type == null || string.IsNullOrEmpty(type.Name)) continue;
-
-                var row = new CatalogRow { TypeName = type.Name };
-                foreach (FamilyParameter parameter in parameters)
-                {
-                    string name = parameter.Definition.Name;
-                    try
-                    {
-                        if (!type.HasValue(parameter)) continue;
-
-                        if (parameter.StorageType == StorageType.Double)
-                        {
-                            double? value = type.AsDouble(parameter);
-                            if (value.HasValue) row.Numbers[name] = value.Value;
-                        }
-                        else if (parameter.StorageType == StorageType.Integer)
-                        {
-                            int? value = type.AsInteger(parameter);
-                            if (value.HasValue) row.Numbers[name] = value.Value;
-                        }
-
-                        string text = type.AsValueString(parameter);
-                        if (string.IsNullOrEmpty(text) && parameter.StorageType == StorageType.String)
-                            text = type.AsString(parameter);
-                        if (!string.IsNullOrEmpty(text)) row.Texts[name] = text;
-                    }
-                    catch { /* one unreadable parameter must not lose the whole type */ }
-                }
-
-                catalog.Rows.Add(row);
             }
 
             return catalog;

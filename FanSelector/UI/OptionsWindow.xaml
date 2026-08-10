@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:ClassModifier="internal"
         Title="Fan Selector Options"
-        Height="680" Width="860" MinHeight="560" MinWidth="740"
+        Height="720" Width="1020" MinHeight="600" MinWidth="880"
         WindowStartupLocation="CenterOwner"
         ShowInTaskbar="False"
         Background="#FFF6F6F8"
@@ -44,7 +44,7 @@
       <TextBlock x:Name="BannerText" TextWrapping="Wrap" Foreground="#FF6B5A10" />
     </Border>
 
-    <!-- Notice, e.g. "no families configured yet" -->
+    <!-- Notice, e.g. "no families configured yet", or a settings file that would not load -->
     <Border x:Name="NoticeBorder" DockPanel.Dock="Top" Visibility="Collapsed"
             Background="#FFFFF1E6" BorderBrush="#FFE7C4A0" BorderThickness="1"
             Padding="8,5" Margin="0,0,0,10">
@@ -90,7 +90,7 @@
     <!-- Families and their mapping -->
     <Grid>
       <Grid.ColumnDefinitions>
-        <ColumnDefinition Width="240" />
+        <ColumnDefinition Width="230" />
         <ColumnDefinition Width="16" />
         <ColumnDefinition Width="*" />
       </Grid.ColumnDefinitions>
@@ -119,24 +119,45 @@
         <StackPanel x:Name="MappingPanel">
 
           <DockPanel Margin="0,0,0,2">
-            <Button DockPanel.Dock="Right" x:Name="CopyParamsButton" Content="Copy parameter list"
-                    Click="OnCopyParameters" MinWidth="132" Margin="8,0,0,0"
-                    ToolTip="Copy every parameter of this family, with its kind and value, to the clipboard." />
+            <Button DockPanel.Dock="Right" x:Name="CopyParamsButton" Content="Copy details"
+                    Click="OnCopyParameters" MinWidth="104" Margin="8,0,0,0"
+                    ToolTip="Copy the catalogue's columns and the family's parameters to the clipboard." />
             <TextBlock x:Name="MappingHeader" FontWeight="SemiBold" VerticalAlignment="Center"
                        Text="Parameter mapping" />
           </DockPanel>
-          <TextBlock Style="{StaticResource Hint}" Margin="0,0,0,8"
-                     Text="Point each figure at the TYPE parameter of this family that carries it. Only parameters of a fitting kind are listed — the kind is spelled out beside each name." />
 
-          <CheckBox x:Name="ShowAllBox" Content="Show every parameter of a compatible storage type"
+          <!-- Catalogue file -->
+          <TextBlock Text="Type catalogue" Style="{StaticResource Section}" Margin="0,10,0,4" />
+          <TextBlock Style="{StaticResource Hint}" Margin="0,0,0,6"
+                     Text="The .csv beside the family file. It is the performance database — and the very same file Revit reads to decide which types the family offers, so the two can never drift apart." />
+          <DockPanel>
+            <Button DockPanel.Dock="Right" x:Name="BrowseButton" Content="Browse…"
+                    Click="OnBrowseCatalog" Margin="6,0,0,0" MinWidth="80" />
+            <TextBox x:Name="CatalogBox" VerticalContentAlignment="Center"
+                     TextChanged="OnCatalogTextChanged" />
+          </DockPanel>
+          <TextBlock x:Name="CatalogStatus" Style="{StaticResource Hint}" />
+
+          <!-- Mapping -->
+          <TextBlock Text="Figures" Style="{StaticResource Section}" />
+          <CheckBox x:Name="ShowAllBox" Content="Show every column and every parameter, whatever its kind"
                     Click="OnShowAllChanged" Margin="0,0,0,10" />
 
-          <!-- One row per quantity, built in code from Quantities.All -->
           <Grid x:Name="MappingGrid">
             <Grid.ColumnDefinitions>
-              <ColumnDefinition Width="150" />
+              <ColumnDefinition Width="120" />
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="12" />
               <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+              <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <TextBlock Grid.Row="0" Grid.Column="1" Text="Read from the catalogue"
+                       FontWeight="SemiBold" Margin="0,0,0,4" />
+            <TextBlock Grid.Row="0" Grid.Column="3" Text="Write onto the placed fan (optional)"
+                       FontWeight="SemiBold" Margin="0,0,0,4" />
           </Grid>
 
           <!-- Says WHY a required figure has nothing to map to. An empty dropdown
@@ -149,25 +170,16 @@
 
           <TextBlock Text="Extra columns" Style="{StaticResource Section}" />
           <TextBlock Style="{StaticResource Hint}" Margin="0,0,0,6"
-                     Text="Any other type parameters you want to see beside the results. They are shown only, never filtered on." />
+                     Text="Any other catalogue columns you want to see beside the results — frame size, weight, order code. Shown only, never filtered on." />
 
           <DockPanel>
             <Button DockPanel.Dock="Right" x:Name="AddExtraButton" Content="Add"
                     Click="OnAddExtra" Margin="6,0,0,0" MinWidth="56" />
             <ComboBox x:Name="ExtraPicker" DisplayMemberPath="Label" />
           </DockPanel>
-          <ListBox x:Name="ExtraList" Height="82" Margin="0,6,0,0" />
+          <ListBox x:Name="ExtraList" Height="78" Margin="0,6,0,0" />
           <Button x:Name="RemoveExtraButton" Content="Remove selected column"
                   Click="OnRemoveExtra" Margin="0,6,0,0" HorizontalAlignment="Left" />
-
-          <TextBlock Text="Write air flow onto the placed instance" Style="{StaticResource Section}" />
-          <TextBlock Style="{StaticResource Hint}" Margin="0,0,0,6"
-                     Text="Optional. Only needed by families whose duct connector is driven by an instance override rather than by the type." />
-          <!-- Editable on purpose: instance parameters cannot be listed unless the
-               project already has an instance of the family, so the name has to
-               be typeable. Items are plain names so the text is always the name. -->
-          <ComboBox x:Name="InstanceBox" IsEditable="True" />
-          <TextBlock x:Name="InstanceHint" Style="{StaticResource Hint}" />
 
         </StackPanel>
       </ScrollViewer>

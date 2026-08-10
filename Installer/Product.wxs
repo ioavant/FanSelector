@@ -61,11 +61,10 @@
 							<File Id="MainDll" Source="$(var.MainDllPath)"/>
 						</Component>
 
-						<!-- Sample fan families. The add-in never loads these by
-						     itself — it works with whatever the user has loaded in
-						     their project. They are here so a first-time user has
-						     something to map, and because each .rfa needs its .csv
-						     type catalogue beside it to offer its types on load. -->
+						<!-- Example fan families with their type catalogues. Each
+						     .rfa needs its .csv beside it: that file is both what
+						     Revit reads to offer the types on load and what the
+						     add-in reads as the performance database. -->
 						<Directory Id="SAMPLESDIR" Name="Sample Families"/>
 					</Directory>
 				</Directory>
@@ -126,13 +125,11 @@
 
 			<ComponentRef Id="CoreFiles"/>
 
-			<Feature Id="SampleFamiliesFeature"
-					 Title="Sample fan families"
-					 Description="Three example fan families with type catalogues, to try the add-in against."
-					 Level="1"
-					 Absent="allow">
-				<ComponentGroupRef Id="SampleFamilies"/>
-			</Feature>
+			<!-- Not optional. The example families are what a first-time user has
+			     to map against, and each .csv beside them is a working type
+			     catalogue - i.e. the shape the add-in expects. Leaving them out
+			     only produces an add-in with nothing to point at. -->
+			<ComponentGroupRef Id="SampleFamilies"/>
 
 			<Feature Id="Revit2022Feature"
                      Title="Revit 2022"
