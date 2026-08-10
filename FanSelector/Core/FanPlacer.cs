@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.DB.Structure;
@@ -64,7 +63,8 @@ namespace FanSelector.Core
                 try
                 {
                     string problem;
-                    FamilySymbol symbol = Resolve(doc, candidate, mapping, out problem);
+                    string typeNote;
+                    FamilySymbol symbol = Resolve(doc, candidate, mapping, out typeNote, out problem);
                     if (symbol == null)
                     {
                         transaction.RollBack();
@@ -81,10 +81,10 @@ namespace FanSelector.Core
                     FamilyInstance instance = doc.Create.NewFamilyInstance(
                         target, symbol, level, StructuralType.NonStructural);
 
-                    string note = WriteFigures(instance, mapping, candidate);
+                    string writeNote = WriteFigures(instance, mapping, candidate);
 
                     transaction.Commit();
-                    return new PlacementResult { Placed = true, Message = note };
+                    return new PlacementResult { Placed = true, Message = Join(typeNote, writeNote) };
                 }
                 catch (Exception exception)
                 {
@@ -95,58 +95,129 @@ namespace FanSelector.Core
         }
 
         /// <summary>
-        /// The type to place. A catalogue holds every type the manufacturer offers
-        /// and a project normally has only a handful loaded, so a row the user
-        /// picked may still have to be brought in — LoadFamilySymbol pulls in that
-        /// ONE type rather than all of them.
+        /// The type to place, created from its catalogue line when the project does
+        /// not have it.
+        ///
+        /// It cannot be loaded from the .rfa: the types a type catalogue defines
+        /// exist ONLY in the .csv — the family file itself has none of them, which
+        /// is the whole point of a catalogue — so LoadFamilySymbol has nothing to
+        /// find. What Revit does when it applies a catalogue is what is done here:
+        /// take a type of the family and set every parameter the catalogue names.
         /// </summary>
         private static FamilySymbol Resolve(Document doc, FanCandidate candidate,
-                                            FamilyMapping mapping, out string problem)
+                                            FamilyMapping mapping, out string note, out string problem)
         {
+            note = null;
             problem = null;
             if (candidate.Symbol != null) return candidate.Symbol;
 
-            string familyFile = FamilyFileFor(mapping);
-            if (familyFile == null)
+            List<FamilySymbol> existing = ParameterScanner.SymbolsOf(doc, mapping.FamilyName);
+
+            // Between searching and inserting, somebody may have loaded it.
+            FamilySymbol already = existing.FirstOrDefault(
+                s => string.Equals(s.Name, candidate.TypeName, StringComparison.OrdinalIgnoreCase));
+            if (already != null) return already;
+
+            if (existing.Count == 0)
             {
-                problem = "The type \"" + candidate.TypeName + "\" is not loaded in this project, and the "
-                        + "family file it should come from was not found beside the catalogue.\n\n"
-                        + "Revit expects a type catalogue and its family to sit together under the same "
-                        + "name. Load the type by hand, or put the .rfa next to:\n" + mapping.CatalogPath;
+                problem = "The family \"" + mapping.FamilyName + "\" has no types in this project, so there "
+                        + "is nothing to build \"" + candidate.TypeName + "\" from.\n\n"
+                        + "Load the family into the project first.";
                 return null;
             }
 
-            FamilySymbol symbol;
+            FamilySymbol created;
             try
             {
-                if (!doc.LoadFamilySymbol(familyFile, candidate.TypeName, new LoadOptions(), out symbol)
-                    || symbol == null)
-                {
-                    problem = "Revit did not load the type \"" + candidate.TypeName + "\" from:\n"
-                            + familyFile + "\n\nThe catalogue and the family file may be out of step.";
-                    return null;
-                }
+                created = existing[0].Duplicate(candidate.TypeName) as FamilySymbol;
             }
             catch (Exception exception)
             {
-                problem = "The type \"" + candidate.TypeName + "\" could not be loaded from:\n"
-                        + familyFile + "\n\n" + exception.Message;
+                problem = "The type \"" + candidate.TypeName + "\" could not be created in this project: "
+                        + exception.Message;
                 return null;
             }
 
-            return symbol;
+            if (created == null)
+            {
+                problem = "The type \"" + candidate.TypeName + "\" could not be created in this project.";
+                return null;
+            }
+
+            note = ApplyCatalogRow(created, candidate, mapping);
+            return created;
         }
 
-        /// <summary>The .rfa beside the catalogue, under the same name, or null.</summary>
-        private static string FamilyFileFor(FamilyMapping mapping)
+        /// <summary>
+        /// Write the whole catalogue line onto a freshly made type. Every column of
+        /// a type catalogue is named after a family parameter — that is how Revit
+        /// matches them — so the names line up by construction. Columns that name
+        /// an instance parameter cannot be set here and are reported, because a
+        /// dimension that silently kept the template type's value would give the
+        /// wrong fan.
+        /// </summary>
+        private static string ApplyCatalogRow(FamilySymbol symbol, FanCandidate candidate,
+                                              FamilyMapping mapping)
         {
-            if (mapping == null || string.IsNullOrEmpty(mapping.CatalogPath)) return null;
+            CatalogFile file = CatalogFile.For(mapping.CatalogPath);
+            if (candidate.Row == null || !file.IsUsable)
+                return "The type \"" + candidate.TypeName + "\" was created by copying \""
+                     + symbol.Name + "\", but its catalogue line could not be re-read, so only the "
+                     + "figures below were set.";
+
+            var missed = new List<string>();
+            int applied = 0;
+
+            foreach (CatalogColumn column in file.Columns)
+            {
+                Parameter parameter;
+                try { parameter = symbol.LookupParameter(column.Name); }
+                catch { parameter = null; }
+
+                if (parameter == null || parameter.IsReadOnly)
+                {
+                    // A column with no value on this line was never meant to be set.
+                    if (candidate.Row.Raw.ContainsKey(column.Name)) missed.Add(column.Name);
+                    continue;
+                }
+
+                if (Apply(parameter, candidate.Row, column.Name)) applied++;
+            }
+
+            string text = "\"" + candidate.TypeName + "\" was not in the model, so it was created from the "
+                        + "catalogue (" + applied + " of " + file.Columns.Count + " columns set).";
+            if (missed.Count > 0)
+                text += "\n\nThese columns are not type parameters of the family, so they could not be set "
+                      + "on the type: " + string.Join(", ", missed.ToArray())
+                      + ". If any of them drives the geometry, the new type will look like the one it was "
+                      + "copied from.";
+            return text;
+        }
+
+        private static bool Apply(Parameter parameter, CatalogRow row, string column)
+        {
             try
             {
-                string candidate = Path.ChangeExtension(mapping.CatalogPath, ".rfa");
-                return File.Exists(candidate) ? candidate : null;
+                double? number = row.Number(column);
+                if (parameter.StorageType == StorageType.Double && number.HasValue)
+                    return parameter.Set(number.Value);
+                if (parameter.StorageType == StorageType.Integer && number.HasValue)
+                    return parameter.Set((int)Math.Round(number.Value));
+                if (parameter.StorageType == StorageType.String)
+                {
+                    string text = row.Text(column);
+                    return text.Length > 0 && parameter.Set(text);
+                }
             }
-            catch { return null; }
+            catch { /* one column must not lose the type */ }
+            return false;
+        }
+
+        private static string Join(string first, string second)
+        {
+            if (string.IsNullOrEmpty(first)) return second;
+            if (string.IsNullOrEmpty(second)) return first;
+            return first + "\n\n" + second;
         }
 
         /// <summary>
@@ -240,28 +311,6 @@ namespace FanSelector.Core
 
             Level below = levels.LastOrDefault(l => l.Elevation <= point.Z + 1e-6);
             return below ?? levels[0];
-        }
-
-        /// <summary>
-        /// Loading one type must not quietly rewrite types already in the model:
-        /// somebody may have adjusted them, and this add-in is not the authority
-        /// on that.
-        /// </summary>
-        private class LoadOptions : IFamilyLoadOptions
-        {
-            public bool OnFamilyFound(bool familyInUse, out bool overwriteParameterValues)
-            {
-                overwriteParameterValues = false;
-                return true;
-            }
-
-            public bool OnSharedFamilyFound(Family sharedFamily, bool familyInUse,
-                                            out FamilySource source, out bool overwriteParameterValues)
-            {
-                source = FamilySource.Family;
-                overwriteParameterValues = false;
-                return true;
-            }
         }
     }
 }

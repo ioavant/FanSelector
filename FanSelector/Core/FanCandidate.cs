@@ -11,9 +11,15 @@ namespace FanSelector.Core
 
         /// <summary>
         /// The type as loaded in the project, or null when it is in the catalogue
-        /// but not in this model yet. Placing such a row loads that one type.
+        /// but not in this model yet. Placing such a row creates the type from it.
         /// </summary>
         public FamilySymbol Symbol { get; set; }
+
+        /// <summary>
+        /// The catalogue line this came from, kept so a type missing from the
+        /// model can be built from it.
+        /// </summary>
+        public CatalogRow Row { get; set; }
 
         public bool IsLoaded { get { return Symbol != null; } }
 

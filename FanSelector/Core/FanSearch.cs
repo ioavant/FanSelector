@@ -132,6 +132,7 @@ namespace FanSelector.Core
             {
                 TypeName = row.TypeName,
                 Symbol = symbol,
+                Row = row,
                 AirFlow = airFlow,
                 Pressure = pressure,
                 AirFlowText = Display(row, file, units, mapping.AirFlowColumn),
