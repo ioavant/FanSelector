@@ -1,82 +1,130 @@
-<?xml version="1.0" encoding="utf-8"?>
-<Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
-  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    One net48 assembly for Revit 2022-2026. The add-in uses no version-specific
+    API, so it is compiled against the OLDEST supported release: anything that
+    exists in 2022 exists in every later version, which is not true the other
+    way round.
+
+    Brand is a build-time property - see ..\branding.props and ..\..\_branding:
+
+        dotnet build -p:Brand=Tes
+        dotnet build -p:Brand=Vixeldorf   (default)
+  -->
+
   <PropertyGroup>
-    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
-    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
-    <ProjectGuid>{4B0737E6-45FC-458E-BCB7-712681D62601}</ProjectGuid>
+    <TargetFramework>net48</TargetFramework>
     <OutputType>Library</OutputType>
-    <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>FanSelector</RootNamespace>
-    <AssemblyName>FanSelector</AssemblyName>
-    <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
-    <FileAlignment>512</FileAlignment>
+    <PlatformTarget>x64</PlatformTarget>
+    <LangVersion>latest</LangVersion>
+    <UseWPF>true</UseWPF>
     <Deterministic>true</Deterministic>
+
+    <!-- Brand-dependent: FanSelector.dll / FanSelector.TES.dll. RootNamespace
+         stays put, so embedded resources keep their brand-neutral names either
+         way. -->
+    <RootNamespace>FanSelector</RootNamespace>
+    <AssemblyName>$(BrandAssemblyName)</AssemblyName>
+
+    <!-- Brand-scoped so both brands can be built back to back without clobbering. -->
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <OutputPath>bin\$(Configuration)\$(Brand)\</OutputPath>
+
+    <!-- Assembly attributes come from the generated BrandInfo.cs / VersionInfo.cs;
+         letting the SDK emit its own set as well is a duplicate-attribute error. -->
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+
+    <!-- Revit loads the add-in itself; never produce or ship an app.config. -->
+    <GenerateDependencyFile>false</GenerateDependencyFile>
+    <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
   </PropertyGroup>
-  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
-    <DebugSymbols>true</DebugSymbols>
-    <DebugType>full</DebugType>
-    <Optimize>false</Optimize>
-    <OutputPath>bin\Debug\</OutputPath>
-    <DefineConstants>DEBUG;TRACE</DefineConstants>
-    <ErrorReport>prompt</ErrorReport>
-    <WarningLevel>4</WarningLevel>
+
+  <PropertyGroup>
+    <RevitApiVersion Condition=" '$(RevitApiVersion)' == '' ">2022</RevitApiVersion>
+    <AutodeskRoot Condition=" '$(AutodeskRoot)' == '' ">$(ProgramW6432)\Autodesk</AutodeskRoot>
+    <AutodeskRoot Condition=" !Exists('$(AutodeskRoot)') ">$(ProgramFiles)\Autodesk</AutodeskRoot>
+    <RevitApiDir>$(AutodeskRoot)\Revit $(RevitApiVersion)</RevitApiDir>
   </PropertyGroup>
-  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
-    <DebugType>pdbonly</DebugType>
-    <Optimize>true</Optimize>
-    <OutputPath>bin\Release\</OutputPath>
-    <DefineConstants>TRACE</DefineConstants>
-    <ErrorReport>prompt</ErrorReport>
-    <WarningLevel>4</WarningLevel>
-  </PropertyGroup>
+
+  <Target Name="VerifyRevitApiPresent" BeforeTargets="ResolveAssemblyReferences">
+    <Error Condition=" !Exists('$(RevitApiDir)\RevitAPI.dll') "
+           Text="Revit $(RevitApiVersion) API not found at '$(RevitApiDir)'. Install Revit $(RevitApiVersion), or override with -p:RevitApiVersion=&lt;year&gt; / -p:AutodeskRoot=&lt;path&gt;." />
+  </Target>
+
   <ItemGroup>
-    <Reference Include="PresentationCore" />
+    <!-- Private=false: these ship with Revit and must never be copied next to
+         the add-in. -->
     <Reference Include="RevitAPI">
-      <HintPath>..\..\..\..\..\..\Program Files\Autodesk\Revit 2023\RevitAPI.dll</HintPath>
-      <Private>False</Private>
+      <HintPath>$(RevitApiDir)\RevitAPI.dll</HintPath>
+      <Private>false</Private>
     </Reference>
     <Reference Include="RevitAPIUI">
-      <HintPath>..\..\..\..\..\..\Program Files\Autodesk\Revit 2023\RevitAPIUI.dll</HintPath>
-      <Private>False</Private>
+      <HintPath>$(RevitApiDir)\RevitAPIUI.dll</HintPath>
+      <Private>false</Private>
     </Reference>
-    <Reference Include="System" />
-    <Reference Include="System.Core" />
+    <!-- Autodesk.Windows: unofficial but long-stable ribbon model, used by App.cs
+         to find and reposition the shared "About" panel. -->
+    <Reference Include="AdWindows">
+      <HintPath>$(RevitApiDir)\AdWindows.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- System.Drawing: ElementType.GetPreviewImage returns a GDI+ Bitmap.
+         System.Runtime.Serialization: DataContractJsonSerializer, which reads
+         and writes the settings file without pulling in a JSON package. -->
     <Reference Include="System.Drawing" />
-    <Reference Include="System.Windows.Forms" />
-    <Reference Include="System.Xml.Linq" />
-    <Reference Include="System.Data.DataSetExtensions" />
-    <Reference Include="Microsoft.CSharp" />
-    <Reference Include="System.Data" />
+    <Reference Include="System.Runtime.Serialization" />
     <Reference Include="System.Net.Http" />
-    <Reference Include="System.Xml" />
-    <Reference Include="WindowsBase" />
   </ItemGroup>
+
   <ItemGroup>
-    <Compile Include="App.cs" />
-    <Compile Include="CatalogForm.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="CatalogForm.Designer.cs">
-      <DependentUpon>CatalogForm.cs</DependentUpon>
-    </Compile>
-    <Compile Include="CsvReader.cs" />
-    <Compile Include="ElementParameter.cs" />
-    <Compile Include="Main.cs" />
-    <Compile Include="OpenWebPage.cs" />
-    <Compile Include="Properties\AssemblyInfo.cs" />
+    <!-- Both are generated before CoreCompile and are git-ignored, so they may
+         not exist when the default glob runs on a clean clone. Listing them
+         explicitly makes the first build work; the Remove keeps the glob from
+         adding a duplicate on every build after that. -->
+    <Compile Remove="Properties\BrandInfo.cs;Properties\VersionInfo.cs" />
+    <Compile Include="Properties\BrandInfo.cs" />
+    <Compile Include="Properties\VersionInfo.cs" />
   </ItemGroup>
+
   <ItemGroup>
-    <EmbeddedResource Include="CatalogForm.resx">
-      <DependentUpon>CatalogForm.cs</DependentUpon>
-      <SubType>Designer</SubType>
-    </EmbeddedResource>
+    <!-- Product artwork. Brand artwork (web_icon.png, logo.png) is contributed
+         per brand by _branding\Branding.targets, not listed here. -->
+    <EmbeddedResource Include="Resources\*.png" />
+    <None Include="..\version.json" />
   </ItemGroup>
-  <ItemGroup />
-  <ItemGroup>
-    <EmbeddedResource Include="Resources\icon.png" />
-    <EmbeddedResource Include="Resources\Icon_web.ico" />
-    <EmbeddedResource Include="Resources\web_icon.png" />
-  </ItemGroup>
-  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+
+  <!-- =================================================================== -->
+  <!-- Single source of truth for the version: ..\version.json             -->
+  <!-- Reads "version" from it and generates Properties\VersionInfo.cs     -->
+  <!-- with the AssemblyVersion attributes before every compile. The MSI    -->
+  <!-- binds its own version to the built DLL, so this one file drives      -->
+  <!-- everything. Edit the version ONLY there.                             -->
+  <!-- =================================================================== -->
+  <PropertyGroup>
+    <VersionJsonFile>$(MSBuildProjectDirectory)\..\version.json</VersionJsonFile>
+    <GeneratedVersionFile>$(MSBuildProjectDirectory)\Properties\VersionInfo.cs</GeneratedVersionFile>
+  </PropertyGroup>
+
+  <Target Name="GenerateVersionInfo" BeforeTargets="CoreCompile" Inputs="$(VersionJsonFile)" Outputs="$(GeneratedVersionFile)">
+    <ReadLinesFromFile File="$(VersionJsonFile)">
+      <Output TaskParameter="Lines" ItemName="VersionJsonLines" />
+    </ReadLinesFromFile>
+    <PropertyGroup>
+      <VersionJsonText>@(VersionJsonLines, '')</VersionJsonText>
+      <ProductVersion>$([System.Text.RegularExpressions.Regex]::Replace($(VersionJsonText), '(?s)^.*?&quot;version&quot;\s*:\s*&quot;([^&quot;]+)&quot;.*$', '$1'))</ProductVersion>
+    </PropertyGroup>
+    <Error Condition="'$(ProductVersion)' == '' or '$(ProductVersion)' == '$(VersionJsonText)'" Text="Could not read 'version' from version.json" />
+    <ItemGroup>
+      <VersionInfoLines Include="// &lt;auto-generated&gt; — generated from version.json by the GenerateVersionInfo target. Do not edit." />
+      <VersionInfoLines Include="using System.Reflection%3B" />
+      <VersionInfoLines Include="[assembly: AssemblyVersion(&quot;$(ProductVersion)&quot;)]" />
+      <VersionInfoLines Include="[assembly: AssemblyFileVersion(&quot;$(ProductVersion)&quot;)]" />
+    </ItemGroup>
+    <WriteLinesToFile File="$(GeneratedVersionFile)" Lines="@(VersionInfoLines)" Overwrite="true" WriteOnlyWhenDifferent="true" />
+    <Message Importance="high" Text="Fan Selector version stamped from version.json: $(ProductVersion)" />
+  </Target>
+
 </Project>

@@ -1,0 +1,27 @@
+<Project>
+
+  <!--
+    Brand wiring for Fan Selector. Imported automatically by FanSelector.csproj
+    (through Microsoft.Common.props) and explicitly by Installer.wixproj, which
+    does not pick up Directory.Build.props on its own.
+
+        dotnet build -p:Brand=Tes
+        dotnet build -p:Brand=Vixeldorf   (default)
+  -->
+
+  <PropertyGroup>
+    <_BrandingPropsImported Condition=" '$(_BrandingPropsImported)' == '' ">false</_BrandingPropsImported>
+  </PropertyGroup>
+
+  <PropertyGroup Condition=" '$(_BrandingPropsImported)' == 'false' ">
+    <Brand Condition=" '$(Brand)' == '' ">Vixeldorf</Brand>
+  </PropertyGroup>
+
+  <!-- Product first: it may override defaults the shared engine would fill in. -->
+  <Import Project="$(MSBuildThisFileDirectory)branding.props"
+          Condition=" '$(_BrandingPropsImported)' == 'false' " />
+
+  <Import Project="$([MSBuild]::GetDirectoryNameOfFileAbove('$(MSBuildThisFileDirectory)', '_branding\Branding.props'))\_branding\Branding.props"
+          Condition=" '$(_BrandingPropsImported)' == 'false' " />
+
+</Project>

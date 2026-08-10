@@ -1,27 +1,48 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+
+	<!--
+	  Brand-neutral. Every name, path, artwork file and GUID below comes from
+	  brand.generated.wxi, which the GenerateBrandWxi target writes into this
+	  folder on each build from ..\..\_branding\<Brand>\brand.props plus
+	  ..\branding.props. Build with:
+
+	      MSBuild Installer.wixproj /p:Configuration=Release /p:Brand=Tes
+
+	  The include is referenced by bare filename on purpose: these paths sit
+	  under "Revit Addins" and a candle -d switch would have to fight the space.
+	-->
+	<?include brand.generated.wxi ?>
+
 	<Product
 	  Id="*"
-	  Name="TES Fan Selector"
+	  Name="$(var.FullProductName)"
 	  Language="1033"
-	  Version="1.0.0"
-	  Manufacturer="TES"
-	  UpgradeCode="DE5C7154-0183-4C78-BAC7-8F8D97E7D5A3">
+	  Version="!(bind.FileVersion.MainDll)"
+	  Manufacturer="$(var.Manufacturer)"
+	  UpgradeCode="$(var.UpgradeCode)">
 
 		<Package InstallerVersion="500" Compressed="yes" InstallScope="perMachine" />
 
-		<!-- Upgrade -->
-		<MajorUpgrade DowngradeErrorMessage="A newer version is already installed." />
+		<!-- Upgrade.
+		     AllowSameVersionUpgrades makes the version range inclusive of the
+		     current version. Without it MajorUpgrade only supersedes versions
+		     strictly below this one, so reinstalling the same version lands a
+		     SECOND product beside the first — two manifests, one AddInId, and
+		     Revit refuses the add-in with "Duplicated AddInId". Costs an ICE61
+		     warning, suppressed in Installer.wixproj. -->
+		<MajorUpgrade AllowSameVersionUpgrades="yes"
+		              DowngradeErrorMessage="A newer version is already installed." />
 
 		<MediaTemplate EmbedCab="yes" />
 
 		<UIRef Id="WixUI_FeatureTree"/>
 		<UIRef Id="WixUI_ErrorProgressText"/>
 
-		<WixVariable Id="WixUILicenseRtf" Value="License.rtf"/>
+		<WixVariable Id="WixUILicenseRtf" Value="$(var.LicenseRtf)"/>
 
-		<WixVariable Id="WixUIBannerBmp" Value="UI\BannerTes.bmp"/>
-		<WixVariable Id="WixUIDialogBmp" Value="UI\DialogTes.bmp"/>
+		<WixVariable Id="WixUIBannerBmp" Value="$(var.BannerBmp)"/>
+		<WixVariable Id="WixUIDialogBmp" Value="$(var.DialogBmp)"/>
 
 		<!-- ================== UI CHECKBOXES ================== -->
 		<Property Id="REVIT2022" Value="1"/>
@@ -29,67 +50,65 @@
 		<Property Id="REVIT2024" Value="1"/>
 		<Property Id="REVIT2025" Value="1"/>
 		<Property Id="REVIT2026" Value="1"/>
-		
+
 		<!-- ================== DIRECTORIES ================== -->
 		<Directory Id="TARGETDIR" Name="SourceDir">
 			<Directory Id="CommonAppDataFolder">
-				<Directory Id="TESDIR" Name="TES">
-					<Directory Id="FANDIR" Name="FanSelector">
-						<Component Id="CoreFiles" Guid="*">
-							<File Source="$(var.FanSelector.TargetDir)FanSelector.dll"/>
+				<!-- %ProgramData%\<brand>\<product> -->
+				<Directory Id="BRANDROOTDIR" Name="$(var.InstallRoot)">
+					<Directory Id="PRODUCTDIR" Name="$(var.ProductFolder)">
+						<Component Id="CoreFiles" Guid="$(var.CoreFilesGuid)">
+							<File Id="MainDll" Source="$(var.MainDllPath)"/>
 						</Component>
-							<Directory Id="ImagesDir" Name="Images">
-								<Component Id="ImagesFiles" Guid="E04D6D60-5B5E-406F-9AA4-42894463FE2F">
-									<File Source="Assets\Images\image1.png"/>
-									<File Source="Assets\Images\image2.png"/>
-									<File Source="Assets\Images\image3.png"/>
-									<File Source="Assets\Images\image4.png"/>
-								</Component>
-							</Directory>
-						
+
+						<!-- Sample fan families. The add-in never loads these by
+						     itself — it works with whatever the user has loaded in
+						     their project. They are here so a first-time user has
+						     something to map, and because each .rfa needs its .csv
+						     type catalogue beside it to offer its types on load. -->
+						<Directory Id="SAMPLESDIR" Name="Sample Families"/>
 					</Directory>
 				</Directory>
-				
-			
 
-			<!-- Revit folders -->
-			
+				<!-- Revit addin folders. The manifest file names carry a brand
+				     prefix so the TES and Vixeldorf builds can sit side by side
+				     in the same Addins folder instead of overwriting each other. -->
 				<Directory Id="Autodesk" Name="Autodesk">
 					<Directory Id="Revit" Name="Revit">
 						<Directory Id="Addins" Name="Addins">
 
 							<Directory Id="R2022" Name="2022">
-								<Component Id="Addin2022" Guid="CE243CF9-C065-41E4-95D7-DAF32135145E">
+								<Component Id="Addin2022" Guid="$(var.Addin2022Guid)">
 									<Condition>REVIT2022=1</Condition>
-									<File Source="TES_22.addin"/>
+									<File Id="Addin2022File" Source="$(var.AddinDir)$(var.AddinFileStem)_22.addin"/>
 								</Component>
 							</Directory>
 
 							<Directory Id="R2023" Name="2023">
-								<Component Id="Addin2023" Guid="EF7EF160-6FF9-481E-B9F4-FB1AE8EF9E37">
+								<Component Id="Addin2023" Guid="$(var.Addin2023Guid)">
 									<Condition>REVIT2023=1</Condition>
-									<File Source="TES_23.addin"/>
+									<File Id="Addin2023File" Source="$(var.AddinDir)$(var.AddinFileStem)_23.addin"/>
 								</Component>
 							</Directory>
 
 							<Directory Id="R2024" Name="2024">
-								<Component Id="Addin2024" Guid="5AB314C0-30B3-4C77-AED1-72E2590BE52F">
+								<Component Id="Addin2024" Guid="$(var.Addin2024Guid)">
 									<Condition>REVIT2024=1</Condition>
-									<File Source="TES_24.addin"/>
+									<File Id="Addin2024File" Source="$(var.AddinDir)$(var.AddinFileStem)_24.addin"/>
 								</Component>
 							</Directory>
 
 							<Directory Id="R2025" Name="2025">
-								<Component Id="Addin2025" Guid="F4D4CB2C-658E-4EC0-AF27-3802614AB5A0">
+								<Component Id="Addin2025" Guid="$(var.Addin2025Guid)">
 									<Condition>REVIT2025=1</Condition>
-									<File Source="TES_25.addin"/>
+									<File Id="Addin2025File" Source="$(var.AddinDir)$(var.AddinFileStem)_25.addin"/>
 								</Component>
 							</Directory>
 
 							<Directory Id="R2026" Name="2026">
-								<Component Id="Addin2026" Guid="17D42C49-BE8D-4CCD-9E70-98CAFDD439C7">
+								<Component Id="Addin2026" Guid="$(var.Addin2026Guid)">
 									<Condition>REVIT2026=1</Condition>
-									<File Source="TES_26.addin"/>
+									<File Id="Addin2026File" Source="$(var.AddinDir)$(var.AddinFileStem)_26.addin"/>
 								</Component>
 							</Directory>
 
@@ -99,22 +118,26 @@
 			</Directory>
 		</Directory>
 
-		
-		
-		
 		<!-- ================== FEATURES ================== -->
 		<Feature Id="MainFeature"
-			 Title="TES Fan Selector"
+			 Title="$(var.FullProductName)"
 			 Level="1"
 			 Display="expand">
 
-			<ComponentGroupRef Id="FanSelectorFiles"/>
-			<ComponentGroupRef Id="FanSelectorCoreGroup"/>
 			<ComponentRef Id="CoreFiles"/>
+
+			<Feature Id="SampleFamiliesFeature"
+					 Title="Sample fan families"
+					 Description="Three example fan families with type catalogues, to try the add-in against."
+					 Level="1"
+					 Absent="allow">
+				<ComponentGroupRef Id="SampleFamilies"/>
+			</Feature>
+
 			<Feature Id="Revit2022Feature"
-             Title="Revit 2022"
-             Level="1"
-             Absent="allow">
+                     Title="Revit 2022"
+                     Level="1"
+                     Absent="allow">
 				<ComponentRef Id="Addin2022"/>
 			</Feature>
 
@@ -149,14 +172,7 @@
 
 	</Product>
 
-	<!-- ================== COMPONENT GROUP ================== -->
-	<Fragment>
-		<ComponentGroup Id="FanSelectorCoreGroup">
-			<ComponentRef Id="CoreFiles"/>
-			<ComponentRef Id="ImagesFiles"/>
-		</ComponentGroup>
-	</Fragment>
-
+	<!-- ================== REVIT VERSION SELECTION DIALOG ================== -->
 	<Fragment>
 		<UI>
 			<Dialog Id="RevitSelectionDlg"
@@ -247,6 +263,5 @@
 
 		</UI>
 	</Fragment>
-	
-	
+
 </Wix>

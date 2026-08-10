@@ -1,40 +1,36 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" DefaultTargets="Build" InitialTargets="EnsureWixToolsetInstalled" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <!-- A .wixproj does not import Microsoft.Common.props, so Directory.Build.props
+       has to be pulled in by hand; it is what defines $(Brand) and everything the
+       branding engine derives from it. -->
+  <Import Project="$(MSBuildThisFileDirectory)..\Directory.Build.props"
+          Condition=" '$(_BrandingPropsImported)' != 'true' " />
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">x86</Platform>
     <ProductVersion>3.10</ProductVersion>
     <ProjectGuid>017c78a2-1102-4629-83ac-9ccad2d7dfe6</ProjectGuid>
     <SchemaVersion>2.0</SchemaVersion>
-    <OutputName>Installer</OutputName>
+    <OutputName>FanSelector_Setup_$(Brand)</OutputName>
     <OutputType>Package</OutputType>
+    <!-- ICE61 fires because MajorUpgrade/@AllowSameVersionUpgrades makes the
+         upgrade range overlap this product's own version. That overlap is the
+         point — see the comment in Product.wxs. -->
+    <SuppressIces>ICE61</SuppressIces>
   </PropertyGroup>
+  <!-- Brand-scoped so both MSIs can be built back to back. -->
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|x86' ">
-    <OutputPath>bin\$(Configuration)\</OutputPath>
-    <IntermediateOutputPath>obj\$(Configuration)\</IntermediateOutputPath>
+    <OutputPath>bin\$(Configuration)\$(Brand)\</OutputPath>
+    <IntermediateOutputPath>obj\$(Configuration)\$(Brand)\</IntermediateOutputPath>
     <DefineConstants>Debug</DefineConstants>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|x86' ">
-    <OutputPath>bin\$(Configuration)\</OutputPath>
-    <IntermediateOutputPath>obj\$(Configuration)\</IntermediateOutputPath>
+    <OutputPath>bin\$(Configuration)\$(Brand)\</OutputPath>
+    <IntermediateOutputPath>obj\$(Configuration)\$(Brand)\</IntermediateOutputPath>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="FanSelectorFiles.wxs" />
     <Compile Include="Product.wxs" />
-  </ItemGroup>
-  <ItemGroup>
-    <Folder Include="Assets" />
-    <Folder Include="UI" />
-  </ItemGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\FanSelector\FanSelector.csproj">
-      <Name>FanSelector</Name>
-      <Project>{4b0737e6-45fc-458e-bcb7-712681d62601}</Project>
-      <Private>True</Private>
-      <DoNotHarvest>True</DoNotHarvest>
-      <RefProjectOutputGroups>Binaries;Content;Satellites</RefProjectOutputGroups>
-      <RefTargetDir>INSTALLFOLDER</RefTargetDir>
-    </ProjectReference>
+    <Compile Include="SampleFamilies.wxs" />
   </ItemGroup>
   <ItemGroup>
     <WixExtension Include="WixUIExtension">
@@ -42,17 +38,22 @@
       <Name>WixUIExtension</Name>
     </WixExtension>
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\FanSelector\FanSelector.csproj">
+      <Name>FanSelector</Name>
+      <Project>{4B0737E6-45FC-458E-BCB7-712681D62601}</Project>
+      <Private>True</Private>
+      <DoNotHarvest>True</DoNotHarvest>
+      <RefProjectOutputGroups>Binaries;Content;Satellites</RefProjectOutputGroups>
+      <RefTargetDir>INSTALLFOLDER</RefTargetDir>
+    </ProjectReference>
+  </ItemGroup>
   <Import Project="$(WixTargetsPath)" Condition=" '$(WixTargetsPath)' != '' " />
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\WiX\v3.x\Wix.targets" Condition=" '$(WixTargetsPath)' == '' AND Exists('$(MSBuildExtensionsPath32)\Microsoft\WiX\v3.x\Wix.targets') " />
   <Target Name="EnsureWixToolsetInstalled" Condition=" '$(WixTargetsImported)' != 'true' ">
     <Error Text="The WiX Toolset v3.11 build tools must be installed to build this project. To download the WiX Toolset, see https://wixtoolset.org/releases/v3.11/stable" />
   </Target>
-  <!--
-	To modify your build process, add your task inside one of the targets below and uncomment it.
-	Other similar extension points exist, see Wix.targets.
-	<Target Name="BeforeBuild">
-	</Target>
-	<Target Name="AfterBuild">
-	</Target>
-	-->
+  <!-- Generates the .addin manifests and brand.generated.wxi this project compiles. -->
+  <Import Project="$(MSBuildThisFileDirectory)..\Directory.Build.targets"
+          Condition=" '$(_BrandingTargetsImported)' != 'true' " />
 </Project>

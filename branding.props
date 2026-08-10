@@ -1,0 +1,91 @@
+<Project>
+
+  <!--
+    Fan Selector — product side of the branding configuration.
+
+    What a BRAND is (ribbon tab, About button, help URL, installer artwork,
+    update policy) lives in ..\_branding\<Brand>\brand.props and is shared by
+    every add-in. This file only describes THIS product, plus the handful of
+    values that legitimately differ per brand for it.
+
+    Switch brands with:  dotnet build -p:Brand=Tes     (or -p:Brand=Vixeldorf)
+  -->
+
+  <PropertyGroup>
+    <BrandProduct>FanSelector</BrandProduct>
+    <BrandProductDisplayName>Fan Selector</BrandProductDisplayName>
+    <BrandProductDescription>Search the fan families loaded in the project by air flow and pressure, and place the matching type.</BrandProductDescription>
+
+    <!-- Namespace the generated Brand class is emitted into. -->
+    <BrandInfoNamespace>FanSelector</BrandInfoNamespace>
+    <!-- IExternalApplication class the .addin manifests point at. -->
+    <BrandAppClassName>FanSelector.App</BrandAppClassName>
+
+    <!-- 2022-2026, matching the installer TES already ships. Revit 2027 is a
+         deliberate omission for now: the add-in is one net48 assembly for every
+         version, and 2027 has not been verified against it. -->
+    <BrandSupportedRevitVersions>2022;2023;2024;2025;2026</BrandSupportedRevitVersions>
+
+    <!-- The add-in project folder; the engine derives the built DLL path from it.
+         The file name is brand-dependent (FanSelector.dll / FanSelector.TES.dll),
+         so it is not spelled out here. -->
+    <BrandProjectDir>$(MSBuildThisFileDirectory)FanSelector\</BrandProjectDir>
+
+    <!-- Auto-generated per install location, so each brand gets its own. -->
+    <BrandCoreFilesGuid>*</BrandCoreFilesGuid>
+  </PropertyGroup>
+
+  <!-- ================================================================= -->
+  <!-- TES — the build already in the field.                              -->
+  <!--                                                                    -->
+  <!-- UpgradeCode and AddInId are lifted verbatim from the shipped        -->
+  <!-- Installer\Product.wxs and Installer\TES_*.addin. They must never    -->
+  <!-- change: the UpgradeCode is what makes a new MSI upgrade installed   -->
+  <!-- copies in place instead of installing beside them, and the AddInId  -->
+  <!-- is how Revit identifies the add-in.                                 -->
+  <!--                                                                    -->
+  <!-- The per-version component GUIDs are deliberately regenerated: the   -->
+  <!-- manifests they carry were renamed (TES_22.addin ->                  -->
+  <!-- TES_FanSelector_22.addin), and Windows Installer component rules    -->
+  <!-- require a new GUID whenever a component's keypath changes. The      -->
+  <!-- major upgrade removes the old product wholesale first, so the old   -->
+  <!-- components go with it.                                              -->
+  <!-- ================================================================= -->
+  <PropertyGroup Condition=" '$(Brand)' == 'Tes' ">
+    <!-- All TES add-ins share one "Tools" panel on the TES tab. -->
+    <BrandRibbonPanel>Tools</BrandRibbonPanel>
+
+    <BrandUpgradeCode>DE5C7154-0183-4C78-BAC7-8F8D97E7D5A3</BrandUpgradeCode>
+    <BrandAddInId>8D83C886-B739-4ACD-A9DB-0F6E29F7F123</BrandAddInId>
+  </PropertyGroup>
+
+  <ItemGroup Condition=" '$(Brand)' == 'Tes' ">
+    <BrandAddinComponent Include="2022"><Guid>34196A5E-F5C2-493F-8459-42312EB15E5E</Guid></BrandAddinComponent>
+    <BrandAddinComponent Include="2023"><Guid>29C45758-94CB-4D6B-818C-C8E013F502B6</Guid></BrandAddinComponent>
+    <BrandAddinComponent Include="2024"><Guid>D653C079-E0B3-4BEA-8262-F06EE68DBB14</Guid></BrandAddinComponent>
+    <BrandAddinComponent Include="2025"><Guid>29A675FA-7836-4636-A093-7E9E526CB9BF</Guid></BrandAddinComponent>
+    <BrandAddinComponent Include="2026"><Guid>B0F9FBD2-A361-4F53-88A3-3C0F7EE991B6</Guid></BrandAddinComponent>
+  </ItemGroup>
+
+  <!-- ================================================================= -->
+  <!-- Vixeldorf — fresh GUIDs, never shared with the TES build or with   -->
+  <!-- any other product, so the two MSIs install side by side instead of -->
+  <!-- upgrading over each other.                                         -->
+  <!-- ================================================================= -->
+  <PropertyGroup Condition=" '$(Brand)' == 'Vixeldorf' ">
+    <!-- Vixeldorf products each get their own panel on the shared tab. -->
+    <BrandRibbonPanel>Fan Selector</BrandRibbonPanel>
+
+    <BrandUpgradeCode>A50A81F3-FD09-44F4-8D0F-231713511DEF</BrandUpgradeCode>
+    <BrandAddInId>14FBE7EF-D6E1-49BE-BD30-E715C9FD5834</BrandAddInId>
+  </PropertyGroup>
+
+  <ItemGroup Condition=" '$(Brand)' == 'Vixeldorf' ">
+    <BrandAddinComponent Include="2022"><Guid>08DC5005-54BB-4404-9D86-9CCA8F6E1E16</Guid></BrandAddinComponent>
+    <BrandAddinComponent Include="2023"><Guid>29FCE2F8-B976-4657-9C9C-9C2867196E88</Guid></BrandAddinComponent>
+    <BrandAddinComponent Include="2024"><Guid>73DDACCA-79B0-4477-B645-601F120B71FC</Guid></BrandAddinComponent>
+    <BrandAddinComponent Include="2025"><Guid>9372953D-4D93-47DE-82DD-362BB4B19E32</Guid></BrandAddinComponent>
+    <BrandAddinComponent Include="2026"><Guid>85D82B5F-651A-4B12-B4D5-B5D55AE527C3</Guid></BrandAddinComponent>
+  </ItemGroup>
+
+</Project>

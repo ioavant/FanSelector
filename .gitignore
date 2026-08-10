@@ -361,3 +361,8 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+# ── Branding / version: generated at build time, never committed ──
+FanSelector/Properties/BrandInfo.cs
+FanSelector/Properties/VersionInfo.cs
+Installer/brand.generated.wxi
+Installer/obj/addins/
