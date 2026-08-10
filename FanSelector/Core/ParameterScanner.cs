@@ -17,24 +17,31 @@ namespace FanSelector.Core
         /// <summary>The project's unit for that kind — "m³/h", "cm".</summary>
         public string UnitSymbol { get; set; }
 
+        /// <summary>Whether each placed fan owns its own value, or the type does.</summary>
+        public bool IsInstance { get; set; }
+
         /// <summary>The "leave this quantity unmapped" entry every dropdown starts with.</summary>
         public bool IsNone { get; set; }
 
         /// <summary>
-        /// What the dropdown shows: "AirFlow — Air Flow (m³/h)". The KIND is
-        /// spelled out, not just the unit: a list full of "A — Length (cm)" makes
-        /// it obvious at a glance that the family carries no air flow at all,
-        /// where a bare "A — cm" only looks like noise.
+        /// What the dropdown shows: "AirFlow — Air Flow (m³/h), instance". The KIND
+        /// is spelled out, not just the unit: a list full of "A — Length (cm)"
+        /// makes it obvious at a glance that the family carries no air flow, where
+        /// a bare "A — cm" only looks like noise.
         /// </summary>
         public string Label
         {
             get
             {
                 if (IsNone) return "(not mapped)";
-                if (string.IsNullOrEmpty(SpecLabel)) return Name;
-                return string.IsNullOrEmpty(UnitSymbol)
-                    ? Name + "  —  " + SpecLabel
-                    : Name + "  —  " + SpecLabel + " (" + UnitSymbol + ")";
+
+                string label = Name;
+                if (!string.IsNullOrEmpty(SpecLabel))
+                {
+                    label += "  —  " + SpecLabel;
+                    if (!string.IsNullOrEmpty(UnitSymbol)) label += " (" + UnitSymbol + ")";
+                }
+                return label + (IsInstance ? ",  instance" : string.Empty);
             }
         }
 
@@ -47,9 +54,10 @@ namespace FanSelector.Core
     }
 
     /// <summary>
-    /// Reads what a project actually contains: which fan families are loaded,
-    /// which types they have, and which of their parameters could plausibly
-    /// carry a given performance figure.
+    /// Reads what a project actually contains: which fan families are loaded and
+    /// which types they have. Which of their PARAMETERS could carry a performance
+    /// figure is answered from <see cref="FamilyCatalog"/>, because the project
+    /// side cannot see instance parameters at all.
     /// </summary>
     internal static class ParameterScanner
     {
@@ -71,7 +79,7 @@ namespace FanSelector.Core
             catch { return new List<string>(); }
         }
 
-        /// <summary>Every type of one family, in the order Revit lists them.</summary>
+        /// <summary>Every type of one family that is loaded in the project.</summary>
         public static List<FamilySymbol> SymbolsOf(Document doc, string familyName)
         {
             if (string.IsNullOrEmpty(familyName)) return new List<FamilySymbol>();
@@ -90,80 +98,57 @@ namespace FanSelector.Core
         }
 
         /// <summary>
-        /// Any one type of the family, used to read the parameter list the
-        /// mapping dialog offers. Every type of a family carries the same type
-        /// parameters, so which one is irrelevant.
+        /// Parameters that may carry this quantity. By default only those whose
+        /// spec says so; with <paramref name="showAll"/> every parameter the family
+        /// declares, because an escape hatch that still filters is not one.
         /// </summary>
-        public static FamilySymbol ProbeSymbol(Document doc, string familyName)
+        public static List<ParamChoice> Choices(FamilyCatalog catalog, QuantityInfo quantity,
+                                                bool showAll, Units units)
         {
-            List<FamilySymbol> symbols = SymbolsOf(doc, familyName);
-            return symbols.Count == 0 ? null : symbols[0];
-        }
-
-        /// <summary>
-        /// A placed instance of the family, if the project has one. Instance
-        /// parameters cannot be listed from a FamilySymbol, so this is what makes
-        /// the optional "write air flow onto the instance" dropdown — and the
-        /// diagnosis below — possible.
-        /// </summary>
-        public static FamilyInstance ProbeInstance(Document doc, string familyName)
-        {
-            if (string.IsNullOrEmpty(familyName)) return null;
-            try
-            {
-                return new FilteredElementCollector(doc)
-                    .OfClass(typeof(FamilyInstance))
-                    .OfCategory(BuiltInCategory.OST_MechanicalEquipment)
-                    .Cast<FamilyInstance>()
-                    .FirstOrDefault(i => i.Symbol != null && i.Symbol.Family != null &&
-                                         string.Equals(i.Symbol.Family.Name, familyName,
-                                                       StringComparison.OrdinalIgnoreCase));
-            }
-            catch { return null; }
-        }
-
-        /// <summary>
-        /// Parameters of <paramref name="probe"/> that may carry this quantity.
-        /// By default only those whose spec says so; with <paramref name="showAll"/>
-        /// literally every parameter, because an escape hatch that still filters
-        /// is not an escape hatch.
-        /// </summary>
-        public static List<ParamChoice> Choices(Element probe, QuantityInfo quantity, bool showAll, Units units)
-        {
-            if (showAll) return AllChoices(probe, units);
+            if (showAll) return AllChoices(catalog, units);
 
             var choices = new List<ParamChoice>();
-            if (probe == null || quantity == null) return choices;
+            if (catalog == null || quantity == null) return choices;
 
-            foreach (Parameter parameter in Enumerate(probe))
-            {
-                ForgeTypeId spec = RevitUnits.SpecOf(parameter);
-                if (!Quantities.AcceptsSpec(quantity, spec)) continue;
-                choices.Add(Describe(parameter, spec, units));
-            }
+            foreach (CatalogParameter parameter in catalog.Parameters)
+                if (Quantities.AcceptsSpec(quantity, parameter.Spec))
+                    choices.Add(Describe(parameter, units));
 
-            return Dedupe(choices);
+            return Sorted(choices);
         }
 
-        /// <summary>Every parameter of the element — the pool for extra display columns.</summary>
-        public static List<ParamChoice> AllChoices(Element probe, Units units)
+        /// <summary>Every parameter the family declares — the pool for extra display columns.</summary>
+        public static List<ParamChoice> AllChoices(FamilyCatalog catalog, Units units)
         {
             var choices = new List<ParamChoice>();
-            if (probe == null) return choices;
+            if (catalog == null) return choices;
 
-            foreach (Parameter parameter in Enumerate(probe))
-                choices.Add(Describe(parameter, RevitUnits.SpecOf(parameter), units));
+            foreach (CatalogParameter parameter in catalog.Parameters)
+                choices.Add(Describe(parameter, units));
 
-            return Dedupe(choices);
+            return Sorted(choices);
         }
 
-        private static ParamChoice Describe(Parameter parameter, ForgeTypeId spec, Units units)
+        /// <summary>Only the instance parameters, for the optional "write onto the instance" mapping.</summary>
+        public static List<ParamChoice> InstanceChoices(FamilyCatalog catalog, Units units)
+        {
+            var choices = new List<ParamChoice>();
+            if (catalog == null) return choices;
+
+            foreach (CatalogParameter parameter in catalog.Parameters)
+                if (parameter.IsInstance) choices.Add(Describe(parameter, units));
+
+            return Sorted(choices);
+        }
+
+        private static ParamChoice Describe(CatalogParameter parameter, Units units)
         {
             return new ParamChoice
             {
-                Name = parameter.Definition.Name,
-                SpecLabel = RevitUnits.SpecLabel(spec),
-                UnitSymbol = RevitUnits.Symbol(units, spec)
+                Name = parameter.Name,
+                SpecLabel = RevitUnits.SpecLabel(parameter.Spec),
+                UnitSymbol = RevitUnits.Symbol(units, parameter.Spec),
+                IsInstance = parameter.IsInstance
             };
         }
 
@@ -172,11 +157,11 @@ namespace FanSelector.Core
         /// name looks right, or — failing that — the only spec match there is.
         /// Returns null when guessing would be a coin toss.
         /// </summary>
-        public static string Guess(Element probe, QuantityInfo quantity)
+        public static string Guess(FamilyCatalog catalog, QuantityInfo quantity)
         {
-            if (probe == null || quantity == null) return null;
+            if (catalog == null || quantity == null) return null;
 
-            List<string> specMatches = Matching(probe, quantity);
+            List<string> specMatches = Matching(catalog, quantity);
 
             foreach (string hint in quantity.NameHints)
                 foreach (string name in specMatches)
@@ -187,124 +172,82 @@ namespace FanSelector.Core
         }
 
         /// <summary>
-        /// Why a REQUIRED quantity has nothing to map to, in words the user can
-        /// act on — or null when it does have candidates. Without this the
-        /// dropdown is simply empty and the family looks broken for no stated
-        /// reason.
+        /// Why a quantity has nothing to map to, in words the user can act on — or
+        /// null when it does have candidates.
         /// </summary>
-        public static string Diagnose(FamilySymbol type, FamilyInstance instance, QuantityInfo quantity)
+        public static string Diagnose(FamilyCatalog catalog, QuantityInfo quantity)
         {
-            if (type == null || quantity == null) return null;
-            if (Matching(type, quantity).Count > 0) return null;
+            if (catalog == null || !catalog.IsUsable || quantity == null) return null;
+            if (Matching(catalog, quantity).Count > 0) return null;
 
             string kind = RevitUnits.SpecLabel(quantity.Specs.FirstOrDefault());
             if (string.IsNullOrEmpty(kind)) kind = quantity.DisplayName;
 
-            // The likely case, and the one nobody can diagnose from an empty
-            // dropdown: the family does carry the figure, but per instance.
-            if (instance != null)
-            {
-                List<string> onInstance = Matching(instance, quantity);
-                if (onInstance.Count > 0)
-                    return quantity.DisplayName + ": this family carries \"" + onInstance[0]
-                         + "\" on the INSTANCE, not on the type. Fan Selector compares one type against "
-                         + "another, so the figure has to be a TYPE parameter. Change it to a type "
-                         + "parameter in the Family Editor, or select a family that stores it per type.";
-            }
-
-            return quantity.DisplayName + ": no type parameter of this family holds a \"" + kind
-                 + "\" value. Either the family carries no performance data on its types, or it keeps it "
-                 + "in a parameter of another kind — tick \"Show every parameter\" to see all of them.";
+            return quantity.DisplayName + ": no parameter of this family — type or instance — holds a \""
+                 + kind + "\" value. Either the family carries no such data, or it keeps it in a parameter "
+                 + "of another kind; tick \"Show every parameter\" to see all of them.";
         }
 
-        /// <summary>Names of the element's parameters whose spec fits the quantity.</summary>
-        private static List<string> Matching(Element element, QuantityInfo quantity)
+        private static List<string> Matching(FamilyCatalog catalog, QuantityInfo quantity)
         {
-            var names = new List<string>();
-            foreach (Parameter parameter in Enumerate(element))
-                if (Quantities.AcceptsSpec(quantity, RevitUnits.SpecOf(parameter)))
-                    names.Add(parameter.Definition.Name);
-            return names;
+            return catalog.Parameters
+                .Where(p => Quantities.AcceptsSpec(quantity, p.Spec))
+                .Select(p => p.Name)
+                .ToList();
         }
 
         /// <summary>
-        /// The whole parameter picture for one family as plain text, for the
-        /// "Copy parameter list" button. When a mapping cannot be made, this is
-        /// what turns "the parameter isn't in the list" into something answerable.
+        /// The whole picture for one family as plain text, for the "Copy parameter
+        /// list" button: every parameter with its kind and whether it is per type
+        /// or per instance, then the values of the first few types.
         /// </summary>
-        public static string Dump(Document doc, string familyName, Units units)
+        public static string Dump(Document doc, FamilyCatalog catalog, Units units)
         {
             var text = new StringBuilder();
-            List<FamilySymbol> symbols = SymbolsOf(doc, familyName);
+            text.AppendLine("Family: " + (catalog == null ? "(none)" : catalog.FamilyName));
 
-            text.AppendLine("Family: " + familyName);
-            text.AppendLine("Types loaded in this project: " + symbols.Count);
-            if (symbols.Count > 0)
-                text.AppendLine("First few: " + string.Join(", ", symbols.Take(8).Select(s => s.Name)));
-            text.AppendLine();
-
-            if (symbols.Count == 0)
+            if (catalog == null || !catalog.IsUsable)
             {
-                text.AppendLine("Nothing to report - the family has no types in this project.");
+                text.AppendLine("Could not be read: " + (catalog == null ? "no catalogue" : catalog.Problem));
                 return text.ToString();
             }
 
-            FamilySymbol probe = symbols[0];
-            text.AppendLine("TYPE PARAMETERS  (read from type \"" + probe.Name + "\")");
-            text.AppendLine("name | kind | unit | storage | read-only | value");
-            AppendParameters(text, probe, units);
-
-            FamilyInstance instance = ProbeInstance(doc, familyName);
+            int loaded = SymbolsOf(doc, catalog.FamilyName).Count;
+            text.AppendLine("Types in the family: " + catalog.Rows.Count
+                            + "   |   types loaded in this project: " + loaded);
             text.AppendLine();
-            if (instance == null)
+
+            text.AppendLine("PARAMETERS");
+            text.AppendLine("name | kind | unit | storage | type or instance");
+            foreach (CatalogParameter parameter in catalog.Parameters
+                         .OrderBy(p => p.Name, StringComparer.CurrentCultureIgnoreCase))
             {
-                text.AppendLine("INSTANCE PARAMETERS: no instance of this family is placed in the project, "
-                                + "so they cannot be listed.");
+                text.AppendLine(string.Join(" | ",
+                    parameter.Name,
+                    RevitUnits.SpecLabel(parameter.Spec),
+                    RevitUnits.Symbol(units, parameter.Spec),
+                    parameter.Storage.ToString(),
+                    parameter.IsInstance ? "instance" : "type"));
             }
-            else
+
+            text.AppendLine();
+            text.AppendLine("VALUES OF THE FIRST TYPES  (parameter = value, blank ones omitted)");
+            foreach (CatalogRow row in catalog.Rows.Take(5))
             {
-                text.AppendLine("INSTANCE PARAMETERS  (read from a placed instance, id " + instance.Id + ")");
-                text.AppendLine("name | kind | unit | storage | read-only | value");
-                AppendParameters(text, instance, units);
+                text.AppendLine();
+                text.AppendLine("[" + row.TypeName + "]");
+                foreach (var pair in row.Texts.OrderBy(p => p.Key, StringComparer.CurrentCultureIgnoreCase))
+                    text.AppendLine("  " + pair.Key + " = " + pair.Value);
             }
+            if (catalog.Rows.Count > 5)
+                text.AppendLine();
+            if (catalog.Rows.Count > 5)
+                text.AppendLine("... and " + (catalog.Rows.Count - 5) + " more types.");
 
             return text.ToString();
         }
 
-        private static void AppendParameters(StringBuilder text, Element element, Units units)
-        {
-            foreach (Parameter parameter in Enumerate(element)
-                         .OrderBy(p => p.Definition.Name, StringComparer.CurrentCultureIgnoreCase))
-            {
-                ForgeTypeId spec = RevitUnits.SpecOf(parameter);
-                text.AppendLine(string.Join(" | ",
-                    parameter.Definition.Name,
-                    RevitUnits.SpecLabel(spec),
-                    RevitUnits.Symbol(units, spec),
-                    parameter.StorageType.ToString(),
-                    parameter.IsReadOnly ? "read-only" : "writable",
-                    RevitUnits.Display(parameter)));
-            }
-        }
-
-        private static IEnumerable<Parameter> Enumerate(Element element)
-        {
-            ParameterSet set;
-            try { set = element.Parameters; }
-            catch { yield break; }
-
-            foreach (Parameter parameter in set)
-            {
-                if (parameter == null || parameter.Definition == null) continue;
-                if (string.IsNullOrEmpty(parameter.Definition.Name)) continue;
-                yield return parameter;
-            }
-        }
-
-        // Two parameters of an element can share a name (a shared parameter and a
-        // family parameter, say). LookupParameter would only ever find the first,
-        // so offering the name twice would be offering a choice that does not exist.
-        private static List<ParamChoice> Dedupe(List<ParamChoice> choices)
+        private static List<ParamChoice> Sorted(List<ParamChoice> choices)
         {
             return choices
                 .GroupBy(c => c.Name, StringComparer.OrdinalIgnoreCase)

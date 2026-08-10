@@ -40,57 +40,41 @@ namespace FanSelector.Core
         /// </summary>
         public ForgeTypeId[] Specs { get; private set; }
 
-        /// <summary>
-        /// Storage types offered instead when the user ticks "show every
-        /// parameter" — the escape hatch for a family that keeps, say, static
-        /// pressure in a plain Number.
-        /// </summary>
-        public StorageType[] Storage { get; private set; }
-
         /// <summary>Lower-case fragments that make a parameter name a likely match.</summary>
         public string[] NameHints { get; private set; }
 
         public QuantityInfo(FanQuantity quantity, string displayName, string columnHeader,
-                            bool required, ForgeTypeId[] specs, StorageType[] storage,
-                            string[] nameHints)
+                            bool required, ForgeTypeId[] specs, string[] nameHints)
         {
             Quantity = quantity;
             DisplayName = displayName;
             ColumnHeader = columnHeader;
             Required = required;
             Specs = specs;
-            Storage = storage;
             NameHints = nameHints;
         }
     }
 
     internal static class Quantities
     {
-        private static readonly StorageType[] Numeric =
-            { StorageType.Double, StorageType.Integer };
-
         public static readonly QuantityInfo AirFlow = new QuantityInfo(
             FanQuantity.AirFlow, "Air flow", "Air flow", true,
             new[] { SpecTypeId.AirFlow },
-            Numeric,
             new[] { "airflow", "air flow", "flow", "volume", "cfm", "расход" });
 
         public static readonly QuantityInfo Pressure = new QuantityInfo(
             FanQuantity.Pressure, "Pressure", "Pressure", true,
             new[] { SpecTypeId.HvacPressure, SpecTypeId.PipingPressure },
-            Numeric,
             new[] { "pressure", "static", "total", "давление" });
 
         public static readonly QuantityInfo Power = new QuantityInfo(
             FanQuantity.Power, "Motor power", "Power", false,
             new[] { SpecTypeId.ElectricalPower, SpecTypeId.HvacPower },
-            Numeric,
             new[] { "motorpower", "motor power", "power", "motor", "мощность" });
 
         public static readonly QuantityInfo Speed = new QuantityInfo(
             FanQuantity.Speed, "Speed", "Speed", false,
             new[] { SpecTypeId.AngularSpeed, SpecTypeId.Number, SpecTypeId.Int.Integer },
-            Numeric,
             new[] { "rpm", "speed", "rotation", "обороты" });
 
         // PowerPerFlow is Revit's own specific-fan-power spec (W per unit flow);
@@ -98,7 +82,6 @@ namespace FanSelector.Core
         public static readonly QuantityInfo Sfp = new QuantityInfo(
             FanQuantity.Sfp, "Efficiency / SFP", "SFP", false,
             new[] { SpecTypeId.PowerPerFlow, SpecTypeId.Efficacy, SpecTypeId.Factor, SpecTypeId.Number },
-            Numeric,
             new[] { "sfp", "specific fan power", "efficiency", "efficacy", "кпд" });
 
         // Revit has no sound-power spec, so this is a plain number in every
@@ -106,7 +89,6 @@ namespace FanSelector.Core
         public static readonly QuantityInfo SoundPower = new QuantityInfo(
             FanQuantity.SoundPower, "Sound power", "Sound", false,
             new[] { SpecTypeId.Number, SpecTypeId.Int.Integer },
-            Numeric,
             new[] { "sound", "noise", "lwa", "lpa", "db", "шум", "звук" });
 
         /// <summary>All quantities, in the order the mapping dialog shows them.</summary>
@@ -131,11 +113,6 @@ namespace FanSelector.Core
             foreach (ForgeTypeId candidate in info.Specs)
                 if (candidate != null && candidate.TypeId == spec.TypeId) return true;
             return false;
-        }
-
-        public static bool AcceptsStorage(QuantityInfo info, StorageType storage)
-        {
-            return Array.IndexOf(info.Storage, storage) >= 0;
         }
     }
 }

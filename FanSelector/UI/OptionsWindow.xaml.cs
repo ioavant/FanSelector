@@ -27,6 +27,7 @@ namespace FanSelector.UI
         public FanSettings Settings { get; private set; }
 
         private FamilyMapping _current;
+        private FamilyCatalog _catalog;
         private bool _loading;
 
         /// <param name="notice">Optional line explaining why the dialog opened by itself.</param>
@@ -37,6 +38,10 @@ namespace FanSelector.UI
             _doc = doc;
             _units = doc.GetUnits();
             Settings = Copy(settings);
+
+            // A family edited since the last time the dialog was open should be
+            // read again rather than served from the session cache.
+            FamilyCatalog.Forget();
 
             Title = Brand.FullProductName + " Options";
             TitleText.Text = Brand.ProductDisplayName + " Options  —  v" + UpdateChecker.CurrentVersion;
@@ -184,10 +189,10 @@ namespace FanSelector.UI
         /// <summary>Pre-fill what can be worked out from the family's own parameters.</summary>
         private void GuessMapping(FamilyMapping mapping)
         {
-            FamilySymbol probe = ParameterScanner.ProbeSymbol(_doc, mapping.FamilyName);
-            if (probe == null) return;
+            FamilyCatalog catalog = FamilyCatalog.For(_doc, mapping.FamilyName);
+            if (!catalog.IsUsable) return;
             foreach (QuantityInfo info in Quantities.All)
-                mapping.Set(info.Quantity, ParameterScanner.Guess(probe, info));
+                mapping.Set(info.Quantity, ParameterScanner.Guess(catalog, info));
         }
 
         // ── Mapping panel ─────────────────────────────────────────────────────
@@ -209,6 +214,7 @@ namespace FanSelector.UI
             CommitInstanceBox();
 
             _current = mapping;
+            _catalog = null;
             MappingPanel.IsEnabled = mapping != null;
             MappingWarnBorder.Visibility = System.Windows.Visibility.Collapsed;
             CopyParamsButton.IsEnabled = mapping != null;
@@ -225,17 +231,21 @@ namespace FanSelector.UI
                 return;
             }
 
-            FamilySymbol probe = ParameterScanner.ProbeSymbol(_doc, mapping.FamilyName);
+            // Reading a family means opening its definition, which is not instant
+            // on a family with hundreds of types.
+            System.Windows.Input.Mouse.OverrideCursor = System.Windows.Input.Cursors.Wait;
+            try { _catalog = FamilyCatalog.For(_doc, mapping.FamilyName); }
+            finally { System.Windows.Input.Mouse.OverrideCursor = null; }
+
             MappingHeader.Text = "Parameter mapping for \"" + mapping.FamilyName + "\"";
 
             _loading = true;
             try
             {
-                if (probe == null)
+                if (!_catalog.IsUsable)
                 {
-                    // The mapping was made against a project that had the family
-                    // loaded. Keep it exactly as it is rather than blanking it.
-                    MappingHeader.Text += "  —  not loaded in this project";
+                    // Keep the mapping exactly as it is rather than blanking it:
+                    // it was made against a project where the family could be read.
                     foreach (QuantityInfo info in Quantities.All)
                     {
                         ComboBox combo = _combos[info.Quantity];
@@ -247,7 +257,10 @@ namespace FanSelector.UI
                     ExtraPicker.ItemsSource = null;
                     InstanceBox.ItemsSource = null;
                     InstanceBox.Text = mapping.InstanceAirFlow ?? string.Empty;
-                    InstanceHint.Text = "Load the family into this project to edit its mapping.";
+                    InstanceHint.Text = string.Empty;
+
+                    MappingWarnText.Text = _catalog.Problem;
+                    MappingWarnBorder.Visibility = System.Windows.Visibility.Visible;
                     return;
                 }
 
@@ -258,7 +271,7 @@ namespace FanSelector.UI
                     combo.IsEnabled = true;
 
                     var choices = new List<ParamChoice> { ParamChoice.None() };
-                    choices.AddRange(ParameterScanner.Choices(probe, info, showAll, _units));
+                    choices.AddRange(ParameterScanner.Choices(_catalog, info, showAll, _units));
 
                     string stored = mapping.Get(info.Quantity);
                     if (!string.IsNullOrEmpty(stored) &&
@@ -279,36 +292,33 @@ namespace FanSelector.UI
                 }
 
                 ExtraList.ItemsSource = new List<string>(mapping.ExtraColumns);
-                ExtraPicker.ItemsSource = ParameterScanner.AllChoices(probe, _units);
+                ExtraPicker.ItemsSource = ParameterScanner.AllChoices(_catalog, _units);
 
-                FamilyInstance instance = ParameterScanner.ProbeInstance(_doc, mapping.FamilyName);
-                InstanceBox.ItemsSource = instance == null
-                    ? new List<string>()
-                    : ParameterScanner.AllChoices(instance, _units).Select(c => c.Name).ToList();
+                List<ParamChoice> instanceChoices = ParameterScanner.InstanceChoices(_catalog, _units);
+                InstanceBox.ItemsSource = instanceChoices.Select(c => c.Name).ToList();
                 InstanceBox.Text = mapping.InstanceAirFlow ?? string.Empty;
-                InstanceHint.Text = instance == null
-                    ? "This project has no instance of the family yet, so the name has to be typed."
+                InstanceHint.Text = instanceChoices.Count == 0
+                    ? "This family declares no instance parameters."
                     : string.Empty;
 
-                ShowDiagnosis(probe, instance);
+                ShowDiagnosis();
             }
             finally { _loading = false; }
         }
 
         /// <summary>
         /// Spell out what the family does not offer. The required figures get a
-        /// full explanation — including the common case of the value living on the
-        /// instance rather than the type — and the optional ones are just named,
-        /// so the panel does not turn into a wall of warnings.
+        /// full explanation, the optional ones are just named, so the panel does
+        /// not turn into a wall of warnings.
         /// </summary>
-        private void ShowDiagnosis(FamilySymbol probe, FamilyInstance instance)
+        private void ShowDiagnosis()
         {
             var explained = new List<string>();
             var alsoMissing = new List<string>();
 
             foreach (QuantityInfo info in Quantities.All)
             {
-                string problem = ParameterScanner.Diagnose(probe, instance, info);
+                string problem = ParameterScanner.Diagnose(_catalog, info);
                 if (problem == null) continue;
                 if (info.Required) explained.Add(problem);
                 else alsoMissing.Add(info.DisplayName);
@@ -332,7 +342,7 @@ namespace FanSelector.UI
         private void OnCopyParameters(object sender, RoutedEventArgs e)
         {
             if (_current == null) return;
-            string dump = ParameterScanner.Dump(_doc, _current.FamilyName, _units);
+            string dump = ParameterScanner.Dump(_doc, _catalog, _units);
             try
             {
                 // SetDataObject with copy:true, not SetText: the clipboard is a
@@ -340,8 +350,9 @@ namespace FanSelector.UI
                 Clipboard.SetDataObject(dump, true);
                 MessageBox.Show(this,
                     "The parameter list of \"" + _current.FamilyName + "\" is on the clipboard.\n\n"
-                    + "Paste it anywhere to see every parameter of the family with its kind, unit and "
-                    + "current value — including whether it belongs to the type or to the instance.",
+                    + "Paste it anywhere to see every parameter the family declares — its kind, its unit, "
+                    + "whether it belongs to the type or to each instance — and the values of the first "
+                    + "few types.",
                     Brand.FullProductName, MessageBoxButton.OK, MessageBoxImage.Information);
             }
             catch (Exception exception)

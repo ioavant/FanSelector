@@ -33,27 +33,30 @@ namespace FanSelector.Core
     }
 
     /// <summary>
-    /// The selection itself: read every type of the chosen family through the
-    /// user's parameter mapping, keep the ones within tolerance of the requested
-    /// duty, and rank them.
+    /// The selection itself: read every loaded type of the chosen family through
+    /// the user's parameter mapping, keep the ones within tolerance of the
+    /// requested duty, and rank them.
+    ///
+    /// Values come from the family's own catalogue (see <see cref="FamilyCatalog"/>),
+    /// not from the FamilySymbol, so a family that declares air flow and pressure
+    /// as instance parameters works exactly like one that declares them per type.
     /// </summary>
     internal static class FanSearch
     {
         /// <summary>
         /// The spec of the parameter a quantity is mapped to, so the caller can
         /// format and parse in exactly the units that parameter uses. Null when
-        /// the quantity is unmapped or the family is not loaded.
+        /// the quantity is unmapped or the family cannot be read.
         /// </summary>
         public static ForgeTypeId SpecFor(Document doc, FamilyMapping mapping, FanQuantity quantity)
         {
             if (mapping == null) return null;
-            FamilySymbol probe = ParameterScanner.ProbeSymbol(doc, mapping.FamilyName);
-            if (probe == null) return null;
 
-            string name = mapping.Get(quantity);
-            if (string.IsNullOrEmpty(name)) return null;
+            FamilyCatalog catalog = FamilyCatalog.For(doc, mapping.FamilyName);
+            if (!catalog.IsUsable) return null;
 
-            return RevitUnits.SpecOf(probe.LookupParameter(name));
+            CatalogParameter parameter = catalog.Find(mapping.Get(quantity));
+            return parameter == null ? null : parameter.Spec;
         }
 
         public static SearchResult Run(Document doc, FamilyMapping mapping,
@@ -64,6 +67,13 @@ namespace FanSelector.Core
             if (mapping == null || !mapping.IsUsable)
             {
                 result.Note = "This family has no air flow / pressure mapping yet. Open Options to set one up.";
+                return result;
+            }
+
+            FamilyCatalog catalog = FamilyCatalog.For(doc, mapping.FamilyName);
+            if (!catalog.IsUsable)
+            {
+                result.Note = catalog.Problem;
                 return result;
             }
 
@@ -81,66 +91,54 @@ namespace FanSelector.Core
 
             foreach (FamilySymbol symbol in symbols)
             {
-                double? airFlow = RevitUnits.Number(symbol.LookupParameter(mapping.AirFlow));
-                double? pressure = RevitUnits.Number(symbol.LookupParameter(mapping.Pressure));
+                CatalogRow row = catalog.Row(symbol.Name);
+                if (row == null) { unreadable++; continue; }
+
+                double? airFlow = row.Number(mapping.AirFlow);
+                double? pressure = row.Number(mapping.Pressure);
                 if (!airFlow.HasValue || !pressure.HasValue) { unreadable++; continue; }
 
                 double deviation = Math.Max(Relative(airFlow.Value, targetAirFlow),
                                             Relative(pressure.Value, targetPressure));
                 if (deviation > tolerance) continue;
 
-                result.Candidates.Add(Build(symbol, mapping, airFlow.Value, pressure.Value, deviation));
+                result.Candidates.Add(Build(symbol, row, mapping, airFlow.Value, pressure.Value, deviation));
             }
 
             if (result.Candidates.Count == 0 && unreadable == symbols.Count)
-                result.Note = "None of the " + symbols.Count + " types of \"" + mapping.FamilyName +
-                              "\" has a value in both mapped parameters. Check the mapping in Options.";
+                result.Note = "None of the " + symbols.Count + " loaded types of \"" + mapping.FamilyName +
+                              "\" has a value in both mapped parameters. Check the mapping in Options — "
+                              + "\"Copy parameter list\" there shows what each type actually holds.";
 
             Sort(result.Candidates, sort);
             return result;
         }
 
-        private static FanCandidate Build(FamilySymbol symbol, FamilyMapping mapping,
+        private static FanCandidate Build(FamilySymbol symbol, CatalogRow row, FamilyMapping mapping,
                                           double airFlow, double pressure, double deviation)
         {
-            Parameter power = Lookup(symbol, mapping.Power);
-            Parameter sfp = Lookup(symbol, mapping.Sfp);
-            Parameter sound = Lookup(symbol, mapping.SoundPower);
-
             var candidate = new FanCandidate
             {
                 Symbol = symbol,
                 TypeName = symbol.Name,
                 AirFlow = airFlow,
                 Pressure = pressure,
-                AirFlowText = RevitUnits.Display(Lookup(symbol, mapping.AirFlow)),
-                PressureText = RevitUnits.Display(Lookup(symbol, mapping.Pressure)),
-                PowerText = RevitUnits.Display(power),
-                SpeedText = RevitUnits.Display(Lookup(symbol, mapping.Speed)),
-                SfpText = RevitUnits.Display(sfp),
-                SoundText = RevitUnits.Display(sound),
-                PowerValue = RevitUnits.Number(power),
-                SfpValue = RevitUnits.Number(sfp),
-                SoundValue = RevitUnits.Number(sound),
+                AirFlowText = row.Text(mapping.AirFlow),
+                PressureText = row.Text(mapping.Pressure),
+                PowerText = row.Text(mapping.Power),
+                SpeedText = row.Text(mapping.Speed),
+                SfpText = row.Text(mapping.Sfp),
+                SoundText = row.Text(mapping.SoundPower),
+                PowerValue = row.Number(mapping.Power),
+                SfpValue = row.Number(mapping.Sfp),
+                SoundValue = row.Number(mapping.SoundPower),
                 Deviation = deviation
             };
 
             foreach (string extra in mapping.ExtraColumns)
-                candidate.Extras.Add(RevitUnits.Display(Lookup(symbol, extra)));
+                candidate.Extras.Add(row.Text(extra));
 
             return candidate;
-        }
-
-        /// <summary>
-        /// LookupParameter by a name that may be absent from the mapping at all.
-        /// Every optional quantity goes through here, so an unmapped one reads as
-        /// "no value" rather than throwing on a null name.
-        /// </summary>
-        private static Parameter Lookup(Element element, string parameterName)
-        {
-            if (element == null || string.IsNullOrEmpty(parameterName)) return null;
-            try { return element.LookupParameter(parameterName); }
-            catch { return null; }
         }
 
         /// <summary>

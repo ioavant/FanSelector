@@ -98,8 +98,16 @@ namespace FanSelector.UI
 
             // The search boxes are read in the units of the very parameter they
             // are compared against, so a project in CFM and inWG just works.
-            _airFlowSpec = FanSearch.SpecFor(_doc, mapping, FanQuantity.AirFlow);
-            _pressureSpec = FanSearch.SpecFor(_doc, mapping, FanQuantity.Pressure);
+            // The first of these reads the family definition, which is not
+            // instant on a family with hundreds of types; it is cached afterwards.
+            System.Windows.Input.Mouse.OverrideCursor = System.Windows.Input.Cursors.Wait;
+            try
+            {
+                _airFlowSpec = FanSearch.SpecFor(_doc, mapping, FanQuantity.AirFlow);
+                _pressureSpec = FanSearch.SpecFor(_doc, mapping, FanQuantity.Pressure);
+            }
+            finally { System.Windows.Input.Mouse.OverrideCursor = null; }
+
             AirFlowUnit.Text = RevitUnits.Symbol(_units, _airFlowSpec);
             PressureUnit.Text = RevitUnits.Symbol(_units, _pressureSpec);
 
