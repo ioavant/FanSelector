@@ -42,6 +42,18 @@ namespace FanSelector.Core
                 || double.TryParse(text, NumberStyles.Any, CultureInfo.InvariantCulture, out internalValue);
         }
 
+        /// <summary>
+        /// The name of the kind of quantity a parameter holds — "Air Flow",
+        /// "Length", "Currency". This, not the unit symbol, is what tells the user
+        /// why a parameter is or is not offered for a given figure.
+        /// </summary>
+        public static string SpecLabel(ForgeTypeId spec)
+        {
+            if (spec == null || spec.Empty()) return string.Empty;
+            try { return LabelUtils.GetLabelForSpec(spec) ?? string.Empty; }
+            catch { return string.Empty; }
+        }
+
         /// <summary>The project's unit symbol for a spec ("m³/h", "Pa", "CFM"), or "".</summary>
         public static string Symbol(Units units, ForgeTypeId spec)
         {

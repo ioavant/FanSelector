@@ -192,10 +192,26 @@ namespace FanSelector.UI
 
         // ── Mapping panel ─────────────────────────────────────────────────────
 
+        /// <summary>
+        /// The instance-parameter box is free text, so it has no SelectionChanged
+        /// to write itself back. Committing it whenever the panel is about to be
+        /// reloaded is what stops a typed name from being lost by switching family.
+        /// </summary>
+        private void CommitInstanceBox()
+        {
+            if (_loading || _current == null) return;
+            _current.InstanceAirFlow = string.IsNullOrWhiteSpace(InstanceBox.Text)
+                ? null : InstanceBox.Text.Trim();
+        }
+
         private void LoadMapping(FamilyMapping mapping)
         {
+            CommitInstanceBox();
+
             _current = mapping;
             MappingPanel.IsEnabled = mapping != null;
+            MappingWarnBorder.Visibility = System.Windows.Visibility.Collapsed;
+            CopyParamsButton.IsEnabled = mapping != null;
 
             if (mapping == null)
             {
@@ -250,7 +266,11 @@ namespace FanSelector.UI
                     {
                         // Whatever the filter thinks, the user already chose this
                         // one. Dropping it here would silently unmap it on OK.
-                        choices.Add(new ParamChoice { Name = stored, UnitSymbol = null });
+                        choices.Add(new ParamChoice
+                        {
+                            Name = stored,
+                            SpecLabel = "(not found on this family)"
+                        });
                     }
 
                     combo.ItemsSource = choices;
@@ -269,8 +289,66 @@ namespace FanSelector.UI
                 InstanceHint.Text = instance == null
                     ? "This project has no instance of the family yet, so the name has to be typed."
                     : string.Empty;
+
+                ShowDiagnosis(probe, instance);
             }
             finally { _loading = false; }
+        }
+
+        /// <summary>
+        /// Spell out what the family does not offer. The required figures get a
+        /// full explanation — including the common case of the value living on the
+        /// instance rather than the type — and the optional ones are just named,
+        /// so the panel does not turn into a wall of warnings.
+        /// </summary>
+        private void ShowDiagnosis(FamilySymbol probe, FamilyInstance instance)
+        {
+            var explained = new List<string>();
+            var alsoMissing = new List<string>();
+
+            foreach (QuantityInfo info in Quantities.All)
+            {
+                string problem = ParameterScanner.Diagnose(probe, instance, info);
+                if (problem == null) continue;
+                if (info.Required) explained.Add(problem);
+                else alsoMissing.Add(info.DisplayName);
+            }
+
+            if (explained.Count == 0 && alsoMissing.Count == 0)
+            {
+                MappingWarnBorder.Visibility = System.Windows.Visibility.Collapsed;
+                return;
+            }
+
+            var text = new List<string>(explained);
+            if (alsoMissing.Count > 0)
+                text.Add("Nothing fitting for these either, which is fine if the family simply has no such "
+                         + "data: " + string.Join(", ", alsoMissing) + ".");
+
+            MappingWarnText.Text = string.Join("\n\n", text);
+            MappingWarnBorder.Visibility = System.Windows.Visibility.Visible;
+        }
+
+        private void OnCopyParameters(object sender, RoutedEventArgs e)
+        {
+            if (_current == null) return;
+            string dump = ParameterScanner.Dump(_doc, _current.FamilyName, _units);
+            try
+            {
+                // SetDataObject with copy:true, not SetText: the clipboard is a
+                // shared resource and Revit is not the only thing touching it.
+                Clipboard.SetDataObject(dump, true);
+                MessageBox.Show(this,
+                    "The parameter list of \"" + _current.FamilyName + "\" is on the clipboard.\n\n"
+                    + "Paste it anywhere to see every parameter of the family with its kind, unit and "
+                    + "current value — including whether it belongs to the type or to the instance.",
+                    Brand.FullProductName, MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            catch (Exception exception)
+            {
+                MessageBox.Show(this, "The clipboard could not be written to: " + exception.Message,
+                                Brand.FullProductName, MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
         }
 
         private static List<ParamChoice> Stored(string name)
@@ -320,9 +398,7 @@ namespace FanSelector.UI
 
         private void OnOk(object sender, RoutedEventArgs e)
         {
-            if (_current != null)
-                _current.InstanceAirFlow = string.IsNullOrWhiteSpace(InstanceBox.Text)
-                    ? null : InstanceBox.Text.Trim();
+            CommitInstanceBox();
 
             double tolerance;
             if (!double.TryParse(ToleranceBox.Text, out tolerance) || tolerance <= 0.0 || tolerance > 100.0)

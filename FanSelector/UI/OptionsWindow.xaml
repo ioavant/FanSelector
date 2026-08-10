@@ -118,10 +118,15 @@
       <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto" Padding="0,0,8,0">
         <StackPanel x:Name="MappingPanel">
 
-          <TextBlock x:Name="MappingHeader" Style="{StaticResource Section}" Margin="0,0,0,2"
-                     Text="Parameter mapping" />
+          <DockPanel Margin="0,0,0,2">
+            <Button DockPanel.Dock="Right" x:Name="CopyParamsButton" Content="Copy parameter list"
+                    Click="OnCopyParameters" MinWidth="132" Margin="8,0,0,0"
+                    ToolTip="Copy every parameter of this family, with its kind and value, to the clipboard." />
+            <TextBlock x:Name="MappingHeader" FontWeight="SemiBold" VerticalAlignment="Center"
+                       Text="Parameter mapping" />
+          </DockPanel>
           <TextBlock Style="{StaticResource Hint}" Margin="0,0,0,8"
-                     Text="Point each figure at the type parameter of this family that carries it. Only parameters of a fitting kind are listed." />
+                     Text="Point each figure at the TYPE parameter of this family that carries it. Only parameters of a fitting kind are listed — the kind is spelled out beside each name." />
 
           <CheckBox x:Name="ShowAllBox" Content="Show every parameter of a compatible storage type"
                     Click="OnShowAllChanged" Margin="0,0,0,10" />
@@ -133,6 +138,14 @@
               <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
           </Grid>
+
+          <!-- Says WHY a required figure has nothing to map to. An empty dropdown
+               on its own is indistinguishable from a broken add-in. -->
+          <Border x:Name="MappingWarnBorder" Visibility="Collapsed"
+                  Background="#FFFFF1E6" BorderBrush="#FFE7C4A0" BorderThickness="1"
+                  Padding="8,6" Margin="0,8,0,0">
+            <TextBlock x:Name="MappingWarnText" TextWrapping="Wrap" Foreground="#FF8A4B10" />
+          </Border>
 
           <TextBlock Text="Extra columns" Style="{StaticResource Section}" />
           <TextBlock Style="{StaticResource Hint}" Margin="0,0,0,6"

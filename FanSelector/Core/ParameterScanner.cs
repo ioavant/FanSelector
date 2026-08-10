@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using Autodesk.Revit.DB;
 
 namespace FanSelector.Core
@@ -9,24 +10,37 @@ namespace FanSelector.Core
     internal class ParamChoice
     {
         public string Name { get; set; }
+
+        /// <summary>The kind of quantity it holds — "Air Flow", "Length", "Currency".</summary>
+        public string SpecLabel { get; set; }
+
+        /// <summary>The project's unit for that kind — "m³/h", "cm".</summary>
         public string UnitSymbol { get; set; }
 
         /// <summary>The "leave this quantity unmapped" entry every dropdown starts with.</summary>
         public bool IsNone { get; set; }
 
-        /// <summary>What the dropdown shows: "MotorPower — kW".</summary>
+        /// <summary>
+        /// What the dropdown shows: "AirFlow — Air Flow (m³/h)". The KIND is
+        /// spelled out, not just the unit: a list full of "A — Length (cm)" makes
+        /// it obvious at a glance that the family carries no air flow at all,
+        /// where a bare "A — cm" only looks like noise.
+        /// </summary>
         public string Label
         {
             get
             {
                 if (IsNone) return "(not mapped)";
-                return string.IsNullOrEmpty(UnitSymbol) ? Name : Name + "  —  " + UnitSymbol;
+                if (string.IsNullOrEmpty(SpecLabel)) return Name;
+                return string.IsNullOrEmpty(UnitSymbol)
+                    ? Name + "  —  " + SpecLabel
+                    : Name + "  —  " + SpecLabel + " (" + UnitSymbol + ")";
             }
         }
 
         public static ParamChoice None()
         {
-            return new ParamChoice { IsNone = true, Name = null, UnitSymbol = null };
+            return new ParamChoice { IsNone = true };
         }
 
         public override string ToString() { return Label; }
@@ -88,9 +102,9 @@ namespace FanSelector.Core
 
         /// <summary>
         /// A placed instance of the family, if the project has one. Instance
-        /// parameters cannot be listed from a FamilySymbol, so the optional
-        /// "write air flow onto the instance" dropdown is seeded from here — and
-        /// left as free text when the project has no instance yet.
+        /// parameters cannot be listed from a FamilySymbol, so this is what makes
+        /// the optional "write air flow onto the instance" dropdown — and the
+        /// diagnosis below — possible.
         /// </summary>
         public static FamilyInstance ProbeInstance(Document doc, string familyName)
         {
@@ -111,28 +125,21 @@ namespace FanSelector.Core
         /// <summary>
         /// Parameters of <paramref name="probe"/> that may carry this quantity.
         /// By default only those whose spec says so; with <paramref name="showAll"/>
-        /// every parameter of a compatible storage type, which is the escape hatch
-        /// for a family that keeps pressure in a plain Number.
+        /// literally every parameter, because an escape hatch that still filters
+        /// is not an escape hatch.
         /// </summary>
         public static List<ParamChoice> Choices(Element probe, QuantityInfo quantity, bool showAll, Units units)
         {
+            if (showAll) return AllChoices(probe, units);
+
             var choices = new List<ParamChoice>();
             if (probe == null || quantity == null) return choices;
 
             foreach (Parameter parameter in Enumerate(probe))
             {
                 ForgeTypeId spec = RevitUnits.SpecOf(parameter);
-
-                bool accepted = showAll
-                    ? Quantities.AcceptsStorage(quantity, parameter.StorageType)
-                    : Quantities.AcceptsSpec(quantity, spec);
-                if (!accepted) continue;
-
-                choices.Add(new ParamChoice
-                {
-                    Name = parameter.Definition.Name,
-                    UnitSymbol = RevitUnits.Symbol(units, spec)
-                });
+                if (!Quantities.AcceptsSpec(quantity, spec)) continue;
+                choices.Add(Describe(parameter, spec, units));
             }
 
             return Dedupe(choices);
@@ -145,15 +152,19 @@ namespace FanSelector.Core
             if (probe == null) return choices;
 
             foreach (Parameter parameter in Enumerate(probe))
-            {
-                choices.Add(new ParamChoice
-                {
-                    Name = parameter.Definition.Name,
-                    UnitSymbol = RevitUnits.Symbol(units, RevitUnits.SpecOf(parameter))
-                });
-            }
+                choices.Add(Describe(parameter, RevitUnits.SpecOf(parameter), units));
 
             return Dedupe(choices);
+        }
+
+        private static ParamChoice Describe(Parameter parameter, ForgeTypeId spec, Units units)
+        {
+            return new ParamChoice
+            {
+                Name = parameter.Definition.Name,
+                SpecLabel = RevitUnits.SpecLabel(spec),
+                UnitSymbol = RevitUnits.Symbol(units, spec)
+            };
         }
 
         /// <summary>
@@ -165,12 +176,7 @@ namespace FanSelector.Core
         {
             if (probe == null || quantity == null) return null;
 
-            var specMatches = new List<string>();
-            foreach (Parameter parameter in Enumerate(probe))
-            {
-                if (!Quantities.AcceptsSpec(quantity, RevitUnits.SpecOf(parameter))) continue;
-                specMatches.Add(parameter.Definition.Name);
-            }
+            List<string> specMatches = Matching(probe, quantity);
 
             foreach (string hint in quantity.NameHints)
                 foreach (string name in specMatches)
@@ -178,6 +184,107 @@ namespace FanSelector.Core
                         return name;
 
             return specMatches.Count == 1 ? specMatches[0] : null;
+        }
+
+        /// <summary>
+        /// Why a REQUIRED quantity has nothing to map to, in words the user can
+        /// act on — or null when it does have candidates. Without this the
+        /// dropdown is simply empty and the family looks broken for no stated
+        /// reason.
+        /// </summary>
+        public static string Diagnose(FamilySymbol type, FamilyInstance instance, QuantityInfo quantity)
+        {
+            if (type == null || quantity == null) return null;
+            if (Matching(type, quantity).Count > 0) return null;
+
+            string kind = RevitUnits.SpecLabel(quantity.Specs.FirstOrDefault());
+            if (string.IsNullOrEmpty(kind)) kind = quantity.DisplayName;
+
+            // The likely case, and the one nobody can diagnose from an empty
+            // dropdown: the family does carry the figure, but per instance.
+            if (instance != null)
+            {
+                List<string> onInstance = Matching(instance, quantity);
+                if (onInstance.Count > 0)
+                    return quantity.DisplayName + ": this family carries \"" + onInstance[0]
+                         + "\" on the INSTANCE, not on the type. Fan Selector compares one type against "
+                         + "another, so the figure has to be a TYPE parameter. Change it to a type "
+                         + "parameter in the Family Editor, or select a family that stores it per type.";
+            }
+
+            return quantity.DisplayName + ": no type parameter of this family holds a \"" + kind
+                 + "\" value. Either the family carries no performance data on its types, or it keeps it "
+                 + "in a parameter of another kind — tick \"Show every parameter\" to see all of them.";
+        }
+
+        /// <summary>Names of the element's parameters whose spec fits the quantity.</summary>
+        private static List<string> Matching(Element element, QuantityInfo quantity)
+        {
+            var names = new List<string>();
+            foreach (Parameter parameter in Enumerate(element))
+                if (Quantities.AcceptsSpec(quantity, RevitUnits.SpecOf(parameter)))
+                    names.Add(parameter.Definition.Name);
+            return names;
+        }
+
+        /// <summary>
+        /// The whole parameter picture for one family as plain text, for the
+        /// "Copy parameter list" button. When a mapping cannot be made, this is
+        /// what turns "the parameter isn't in the list" into something answerable.
+        /// </summary>
+        public static string Dump(Document doc, string familyName, Units units)
+        {
+            var text = new StringBuilder();
+            List<FamilySymbol> symbols = SymbolsOf(doc, familyName);
+
+            text.AppendLine("Family: " + familyName);
+            text.AppendLine("Types loaded in this project: " + symbols.Count);
+            if (symbols.Count > 0)
+                text.AppendLine("First few: " + string.Join(", ", symbols.Take(8).Select(s => s.Name)));
+            text.AppendLine();
+
+            if (symbols.Count == 0)
+            {
+                text.AppendLine("Nothing to report - the family has no types in this project.");
+                return text.ToString();
+            }
+
+            FamilySymbol probe = symbols[0];
+            text.AppendLine("TYPE PARAMETERS  (read from type \"" + probe.Name + "\")");
+            text.AppendLine("name | kind | unit | storage | read-only | value");
+            AppendParameters(text, probe, units);
+
+            FamilyInstance instance = ProbeInstance(doc, familyName);
+            text.AppendLine();
+            if (instance == null)
+            {
+                text.AppendLine("INSTANCE PARAMETERS: no instance of this family is placed in the project, "
+                                + "so they cannot be listed.");
+            }
+            else
+            {
+                text.AppendLine("INSTANCE PARAMETERS  (read from a placed instance, id " + instance.Id + ")");
+                text.AppendLine("name | kind | unit | storage | read-only | value");
+                AppendParameters(text, instance, units);
+            }
+
+            return text.ToString();
+        }
+
+        private static void AppendParameters(StringBuilder text, Element element, Units units)
+        {
+            foreach (Parameter parameter in Enumerate(element)
+                         .OrderBy(p => p.Definition.Name, StringComparer.CurrentCultureIgnoreCase))
+            {
+                ForgeTypeId spec = RevitUnits.SpecOf(parameter);
+                text.AppendLine(string.Join(" | ",
+                    parameter.Definition.Name,
+                    RevitUnits.SpecLabel(spec),
+                    RevitUnits.Symbol(units, spec),
+                    parameter.StorageType.ToString(),
+                    parameter.IsReadOnly ? "read-only" : "writable",
+                    RevitUnits.Display(parameter)));
+            }
         }
 
         private static IEnumerable<Parameter> Enumerate(Element element)
