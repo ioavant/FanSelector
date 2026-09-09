@@ -65,6 +65,10 @@
     <Border DockPanel.Dock="Bottom" BorderBrush="#FFDDDDE3" BorderThickness="0,1,0,0"
             Padding="0,10,0,0" Margin="0,12,0,0">
       <Grid>
+        <Grid.RowDefinitions>
+          <RowDefinition Height="Auto" />
+          <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
         <Grid.ColumnDefinitions>
           <ColumnDefinition Width="Auto" />
           <ColumnDefinition Width="Auto" />
@@ -76,14 +80,31 @@
           <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>
 
-        <TextBlock Grid.Column="0" Text="Default tolerance" VerticalAlignment="Center" Margin="0,0,8,0" />
-        <TextBox x:Name="ToleranceBox" Grid.Column="1" Width="60" />
-        <TextBlock Grid.Column="2" Text="%" VerticalAlignment="Center" Margin="6,0,0,0" />
-
-        <TextBlock Grid.Column="4" Text="Mounting offset above the picked point"
+        <TextBlock Grid.Row="0" Grid.Column="0" Text="Default tolerance"
                    VerticalAlignment="Center" Margin="0,0,8,0" />
-        <TextBox x:Name="OffsetBox" Grid.Column="5" Width="90" />
-        <TextBlock x:Name="OffsetUnitText" Grid.Column="6" VerticalAlignment="Center" Margin="6,0,0,0" />
+        <TextBox x:Name="ToleranceBox" Grid.Row="0" Grid.Column="1" Width="60"
+                 HorizontalAlignment="Left" />
+        <TextBlock Grid.Row="0" Grid.Column="2" Text="%" VerticalAlignment="Center" Margin="6,0,0,0" />
+
+        <TextBlock Grid.Row="0" Grid.Column="4" Text="Mounting offset above the picked point"
+                   VerticalAlignment="Center" Margin="0,0,8,0" />
+        <TextBox x:Name="OffsetBox" Grid.Row="0" Grid.Column="5" Width="90"
+                 HorizontalAlignment="Left" />
+        <TextBlock x:Name="OffsetUnitText" Grid.Row="0" Grid.Column="6"
+                   VerticalAlignment="Center" Margin="6,0,0,0" />
+
+        <!-- Used by a generated duct stub. Left empty, the stub takes the system
+             type of the fan connector it grows from and the project's first duct
+             type — which is what Revit would have done unasked. -->
+        <TextBlock Grid.Row="1" Grid.Column="0" Text="Duct system type"
+                   VerticalAlignment="Center" Margin="0,8,8,0" />
+        <ComboBox x:Name="SystemTypeBox" Grid.Row="1" Grid.Column="1" Width="170"
+                  HorizontalAlignment="Left" Margin="0,8,0,0" />
+
+        <TextBlock Grid.Row="1" Grid.Column="4" Text="Duct type"
+                   VerticalAlignment="Center" Margin="0,8,8,0" />
+        <ComboBox x:Name="DuctTypeBox" Grid.Row="1" Grid.Column="5" Width="170"
+                  HorizontalAlignment="Left" Margin="0,8,0,0" />
       </Grid>
     </Border>
 
@@ -138,6 +159,18 @@
           </DockPanel>
           <TextBlock x:Name="CatalogStatus" Style="{StaticResource Hint}" />
 
+          <!-- Picture -->
+          <TextBlock Text="Picture" Style="{StaticResource Section}" Margin="0,10,0,4" />
+          <TextBlock Style="{StaticResource Hint}" Margin="0,0,0,6"
+                     Text="Shown beside the results while this family is selected. A photograph of the machine says more at a glance than a wireframe; without one, Revit's own type preview is used." />
+          <DockPanel>
+            <Button DockPanel.Dock="Right" x:Name="BrowseImageButton" Content="Browse…"
+                    Click="OnBrowseImage" Margin="6,0,0,0" MinWidth="80" />
+            <TextBox x:Name="ImageBox" VerticalContentAlignment="Center"
+                     TextChanged="OnImageTextChanged" />
+          </DockPanel>
+          <TextBlock x:Name="ImageStatus" Style="{StaticResource Hint}" />
+
           <!-- Mapping -->
           <TextBlock Text="Figures" Style="{StaticResource Section}" />
           <CheckBox x:Name="ShowAllBox" Content="Show every column and every parameter, whatever its kind"
@@ -180,6 +213,37 @@
           <ListBox x:Name="ExtraList" Height="78" Margin="0,6,0,0" />
           <Button x:Name="RemoveExtraButton" Content="Remove selected column"
                   Click="OnRemoveExtra" Margin="0,6,0,0" HorizontalAlignment="Left" />
+
+          <!-- Duct stub -->
+          <TextBlock Text="Duct stub and closer" Style="{StaticResource Section}" />
+          <TextBlock Style="{StaticResource Hint}" Margin="0,0,0,6"
+                     Text="Per family on purpose: it suits a fan that sits in a duct run, not every fan. When on, placing a fan also grows a short round duct off one connector — the connector's own diameter — and caps it with an air terminal carrying the air flow you searched for, so the model has a real connected duty straight away." />
+          <CheckBox x:Name="StubBox" Content="Grow a duct stub and cap it when placing this fan"
+                    Click="OnStubToggled" />
+
+          <Grid x:Name="StubDetails" Margin="20,8,0,0">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="110" />
+              <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <TextBlock Grid.Row="0" Grid.Column="0" Text="Closer family"
+                       VerticalAlignment="Center" Margin="0,0,8,6" />
+            <ComboBox Grid.Row="0" Grid.Column="1" x:Name="CloserBox" IsEditable="True"
+                      Margin="0,0,0,6" />
+
+            <TextBlock Grid.Row="1" Grid.Column="0" Text="Stub length"
+                       VerticalAlignment="Center" Margin="0,0,8,0" />
+            <DockPanel Grid.Row="1" Grid.Column="1">
+              <TextBlock DockPanel.Dock="Right" x:Name="StubUnitText" VerticalAlignment="Center"
+                         Margin="6,0,0,0" MinWidth="40" />
+              <TextBox x:Name="StubLengthBox" Width="110" HorizontalAlignment="Left" />
+            </DockPanel>
+          </Grid>
 
         </StackPanel>
       </ScrollViewer>

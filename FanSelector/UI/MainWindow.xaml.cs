@@ -28,6 +28,20 @@ namespace FanSelector.UI
         private ForgeTypeId _airFlowSpec;
         private ForgeTypeId _pressureSpec;
 
+        /// <summary>
+        /// The picture of the selected family, if it has one. Loaded once per
+        /// family rather than per row: it is a photograph of the machine, and it
+        /// changes when the fan does, exactly as the old version behaved.
+        /// </summary>
+        private System.Windows.Media.ImageSource _familyImage;
+
+        /// <summary>
+        /// The air flow the last search asked for, in internal units. Handed to
+        /// placement, where a generated duct stub's terminal is given the DUTY
+        /// rather than the catalogue's own rating.
+        /// </summary>
+        public double RequestedAirFlow { get; private set; }
+
         /// <summary>The type the user chose to place. Non-null only when the dialog returned true.</summary>
         public FanCandidate SelectedCandidate { get; private set; }
 
@@ -84,8 +98,10 @@ namespace FanSelector.UI
         {
             FamilyMapping mapping = Mapping;
             ResultsGrid.ItemsSource = null;
-            PreviewImage.Source = null;
             InsertButton.IsEnabled = false;
+
+            _familyImage = mapping == null ? null : WindowSupport.ImageFromFile(mapping.ImagePath);
+            PreviewImage.Source = _familyImage;
 
             if (mapping == null)
             {
@@ -200,10 +216,11 @@ namespace FanSelector.UI
             }
 
             SearchResult result = FanSearch.Run(_doc, mapping, airFlow, pressure, tolerance, SelectedSort());
+            RequestedAirFlow = airFlow;
 
             BuildColumns(mapping);
             ResultsGrid.ItemsSource = result.Candidates;
-            PreviewImage.Source = null;
+            PreviewImage.Source = _familyImage;
             InsertButton.IsEnabled = false;
 
             if (!string.IsNullOrEmpty(result.Note))
@@ -246,8 +263,11 @@ namespace FanSelector.UI
             var candidate = ResultsGrid.SelectedItem as FanCandidate;
             InsertButton.IsEnabled = candidate != null;
 
-            // Revit can only draw a preview of a type it actually has; a catalogue
-            // row that is not loaded yet simply has no picture.
+            // The family's own photograph wins when it has one. Otherwise fall back
+            // to Revit's type preview, which only exists for a type the model
+            // actually has — most catalogue rows have none.
+            if (_familyImage != null) { PreviewImage.Source = _familyImage; return; }
+
             PreviewImage.Source = candidate == null || candidate.Symbol == null
                 ? null
                 : WindowSupport.FromBitmap(Preview(candidate.Symbol));

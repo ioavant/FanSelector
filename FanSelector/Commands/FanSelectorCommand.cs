@@ -30,9 +30,10 @@ namespace FanSelector.Commands
             // parameter of their family carries air flow and which carries pressure.
             if (settings.Families.Count == 0)
             {
-                settings = OptionsCommand.Show(commandData, doc,
+                settings = OptionsDialog.Show(commandData, doc,
                     "No fan family has been set up yet.\n"
-                    + "Pick one of the families loaded in this project and map its parameters, then continue.");
+                    + "Pick one of the families loaded in this project, point it at its type catalogue, "
+                    + "then continue.");
                 if (settings == null) return Result.Cancelled;
             }
 
@@ -45,7 +46,8 @@ namespace FanSelector.Commands
                 uidoc,
                 window.SelectedCandidate,
                 window.SelectedMapping,
-                window.CurrentSettings.MountingOffsetFt);
+                window.CurrentSettings,
+                window.RequestedAirFlow);
 
             if (placement.Cancelled) return Result.Cancelled;
 

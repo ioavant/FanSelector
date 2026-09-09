@@ -95,6 +95,52 @@ namespace FanSelector.Core
             catch { return new List<FamilySymbol>(); }
         }
 
+        /// <summary>Air terminal family names loaded in the project — the pool for a stub closer.</summary>
+        public static List<string> AirTerminalFamilies(Document doc)
+        {
+            try
+            {
+                return new FilteredElementCollector(doc)
+                    .OfClass(typeof(FamilySymbol))
+                    .OfCategory(BuiltInCategory.OST_DuctTerminal)
+                    .Cast<FamilySymbol>()
+                    .Where(s => s.Family != null && !string.IsNullOrEmpty(s.Family.Name))
+                    .Select(s => s.Family.Name)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(n => n, StringComparer.CurrentCultureIgnoreCase)
+                    .ToList();
+            }
+            catch { return new List<string>(); }
+        }
+
+        /// <summary>Duct system type names in the project — Supply Air, Return Air and so on.</summary>
+        public static List<string> DuctSystemTypes(Document doc)
+        {
+            return Names<Autodesk.Revit.DB.Mechanical.MechanicalSystemType>(doc);
+        }
+
+        /// <summary>Duct type names in the project.</summary>
+        public static List<string> DuctTypes(Document doc)
+        {
+            return Names<Autodesk.Revit.DB.Mechanical.DuctType>(doc);
+        }
+
+        private static List<string> Names<T>(Document doc) where T : Element
+        {
+            try
+            {
+                return new FilteredElementCollector(doc)
+                    .OfClass(typeof(T))
+                    .Cast<T>()
+                    .Where(e => !string.IsNullOrEmpty(e.Name))
+                    .Select(e => e.Name)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(n => n, StringComparer.CurrentCultureIgnoreCase)
+                    .ToList();
+            }
+            catch { return new List<string>(); }
+        }
+
         // ── Catalogue columns: where a figure is READ from ─────────────────────
 
         /// <summary>

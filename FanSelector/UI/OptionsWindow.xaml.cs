@@ -74,6 +74,11 @@ namespace FanSelector.UI
             ToleranceBox.Text = Settings.TolerancePercent.ToString("0.#");
             OffsetBox.Text = RevitUnits.Format(_units, SpecTypeId.Length, Settings.MountingOffsetFt);
             OffsetUnitText.Text = RevitUnits.Symbol(_units, SpecTypeId.Length);
+            StubUnitText.Text = RevitUnits.Symbol(_units, SpecTypeId.Length);
+
+            FillAutomatic(SystemTypeBox, ParameterScanner.DuctSystemTypes(_doc), Settings.DuctSystemType);
+            FillAutomatic(DuctTypeBox, ParameterScanner.DuctTypes(_doc), Settings.DuctType);
+            CloserBox.ItemsSource = ParameterScanner.AirTerminalFamilies(_doc);
             LocationText.Text = "Shared by every Revit version on this machine, stored in:\n"
                               + FanSettings.CurrentLocation;
 
@@ -84,12 +89,41 @@ namespace FanSelector.UI
             RefreshFamilyList(Settings.Families.FirstOrDefault());
         }
 
+        /// <summary>
+        /// A dropdown of project elements with "(automatic)" in front. Leaving it
+        /// on automatic is a real answer, not an unfinished setting: the stub then
+        /// takes the system type of the connector it grows from.
+        /// </summary>
+        private const string Automatic = "(automatic)";
+
+        private static void FillAutomatic(ComboBox combo, List<string> names, string stored)
+        {
+            var items = new List<string> { Automatic };
+            items.AddRange(names);
+            if (!string.IsNullOrEmpty(stored) && !names.Contains(stored, StringComparer.OrdinalIgnoreCase))
+                items.Add(stored);   // keep a name this project happens not to have
+
+            combo.ItemsSource = items;
+            combo.SelectedItem = string.IsNullOrEmpty(stored)
+                ? Automatic
+                : items.FirstOrDefault(n => string.Equals(n, stored, StringComparison.OrdinalIgnoreCase))
+                  ?? Automatic;
+        }
+
+        private static string Chosen(ComboBox combo)
+        {
+            string value = combo.SelectedItem as string;
+            return string.IsNullOrEmpty(value) || value == Automatic ? null : value;
+        }
+
         private static FanSettings Copy(FanSettings source)
         {
             var copy = new FanSettings
             {
                 TolerancePercent = source.TolerancePercent,
-                MountingOffsetMm = source.MountingOffsetMm
+                MountingOffsetMm = source.MountingOffsetMm,
+                DuctSystemType = source.DuctSystemType,
+                DuctType = source.DuctType
             };
             foreach (FamilyMapping mapping in source.Families)
                 copy.Families.Add(mapping.Clone());
@@ -189,8 +223,9 @@ namespace FanSelector.UI
             var mapping = new FamilyMapping
             {
                 FamilyName = family,
-                CatalogPath = GuessCatalogPath(family)
+                CatalogPath = Beside(family, ".csv")
             };
+            mapping.ImagePath = Beside(family, ".jpg") ?? Beside(family, ".png");
             Settings.Families.Add(mapping);
             RefreshFamilyList(mapping);
             GuessMapping();
@@ -198,16 +233,16 @@ namespace FanSelector.UI
         }
 
         /// <summary>
-        /// A catalogue named after the family, in the folder the sample families
-        /// were installed to. Saves the common case a trip through Browse.
+        /// A file named after the family in the folder the sample families were
+        /// installed to. Saves the common case a trip through Browse.
         /// </summary>
-        private static string GuessCatalogPath(string familyName)
+        private static string Beside(string familyName, string extension)
         {
             try
             {
                 string samples = FanSettings.SamplesFolder;
                 if (samples == null) return null;
-                string candidate = Path.Combine(samples, familyName + ".csv");
+                string candidate = Path.Combine(samples, familyName + extension);
                 return File.Exists(candidate) ? candidate : null;
             }
             catch { return null; }
@@ -274,10 +309,87 @@ namespace FanSelector.UI
             LoadMapping(_current);
         }
 
+        // ── Picture ───────────────────────────────────────────────────────────
+
+        private void OnBrowseImage(object sender, RoutedEventArgs e)
+        {
+            if (_current == null) return;
+
+            var dialog = new Microsoft.Win32.OpenFileDialog
+            {
+                Title = "Select a picture for " + _current.FamilyName,
+                Filter = "Images (*.png;*.jpg;*.jpeg;*.bmp;*.gif)|*.png;*.jpg;*.jpeg;*.bmp;*.gif"
+                       + "|All files (*.*)|*.*",
+                CheckFileExists = true
+            };
+
+            try
+            {
+                if (!string.IsNullOrEmpty(_current.ImagePath))
+                    dialog.InitialDirectory = Path.GetDirectoryName(_current.ImagePath);
+                else if (!string.IsNullOrEmpty(_current.CatalogPath))
+                    dialog.InitialDirectory = Path.GetDirectoryName(_current.CatalogPath);
+                else if (FanSettings.SamplesFolder != null)
+                    dialog.InitialDirectory = FanSettings.SamplesFolder;
+            }
+            catch { /* a bad remembered folder is not worth failing over */ }
+
+            if (dialog.ShowDialog(this) != true) return;
+            ImageBox.Text = dialog.FileName;   // TextChanged does the rest
+        }
+
+        private void OnImageTextChanged(object sender, TextChangedEventArgs e)
+        {
+            if (_loading || _current == null) return;
+            _current.ImagePath = string.IsNullOrWhiteSpace(ImageBox.Text) ? null : ImageBox.Text.Trim();
+            ShowImageStatus();
+        }
+
+        private void ShowImageStatus()
+        {
+            if (_current == null || string.IsNullOrEmpty(_current.ImagePath))
+            {
+                ImageStatus.Text = "No picture — Revit's type preview will be shown instead.";
+                return;
+            }
+
+            ImageStatus.Text = WindowSupport.ImageFromFile(_current.ImagePath) != null
+                ? "Picture loads correctly."
+                : "That file could not be read as an image.";
+        }
+
+        // ── Duct stub ─────────────────────────────────────────────────────────
+
+        private void OnStubToggled(object sender, RoutedEventArgs e)
+        {
+            if (_loading || _current == null) return;
+            _current.AddDuctStub = StubBox.IsChecked == true;
+            StubDetails.IsEnabled = _current.AddDuctStub;
+        }
+
+        /// <summary>
+        /// The closer name and the stub length are free text, so they have no
+        /// event that writes them back. Committing them before the panel reloads
+        /// is what stops a typed value from being lost by switching family.
+        /// </summary>
+        private void CommitStubFields()
+        {
+            if (_loading || _current == null) return;
+
+            _current.CloserFamily = string.IsNullOrWhiteSpace(CloserBox.Text)
+                ? FamilyMapping.DefaultCloserFamily : CloserBox.Text.Trim();
+
+            double feet;
+            if (RevitUnits.TryParse(_units, SpecTypeId.Length, StubLengthBox.Text, out feet) && feet > 0.0)
+                _current.SetStubLengthFt(feet);
+        }
+
         // ── Mapping panel ─────────────────────────────────────────────────────
 
         private void LoadMapping(FamilyMapping mapping)
         {
+            CommitStubFields();
+
             _current = mapping;
             _file = null;
             _catalog = null;
@@ -293,6 +405,8 @@ namespace FanSelector.UI
                 foreach (ComboBox combo in _paramCombos.Values) combo.ItemsSource = null;
                 ExtraList.ItemsSource = null;
                 ExtraPicker.ItemsSource = null;
+                ImageBox.Text = string.Empty;
+                ImageStatus.Text = string.Empty;
                 return;
             }
 
@@ -302,6 +416,13 @@ namespace FanSelector.UI
             try
             {
                 CatalogBox.Text = mapping.CatalogPath ?? string.Empty;
+                ImageBox.Text = mapping.ImagePath ?? string.Empty;
+                ShowImageStatus();
+
+                StubBox.IsChecked = mapping.AddDuctStub;
+                StubDetails.IsEnabled = mapping.AddDuctStub;
+                CloserBox.Text = mapping.CloserFamily ?? FamilyMapping.DefaultCloserFamily;
+                StubLengthBox.Text = RevitUnits.Format(_units, SpecTypeId.Length, mapping.StubLengthFt);
 
                 _file = CatalogFile.For(mapping.CatalogPath);
 
@@ -495,6 +616,8 @@ namespace FanSelector.UI
 
         private void OnOk(object sender, RoutedEventArgs e)
         {
+            CommitStubFields();
+
             double tolerance;
             if (!double.TryParse(ToleranceBox.Text, out tolerance) || tolerance <= 0.0 || tolerance > 100.0)
             {
@@ -514,6 +637,16 @@ namespace FanSelector.UI
                 return;
             }
 
+            FamilyMapping badStub = Settings.Families.FirstOrDefault(
+                f => f.AddDuctStub && string.IsNullOrEmpty(f.CloserFamily));
+            if (badStub != null)
+            {
+                FamilyList.SelectedItem = badStub;
+                Warn("\"" + badStub.FamilyName + "\" is set to grow a duct stub but has no closer family "
+                     + "named.\n\nName the air terminal family that caps the stub, or switch the stub off.");
+                return;
+            }
+
             FamilyMapping incomplete = Settings.Families.FirstOrDefault(f => !f.IsUsable);
             if (incomplete != null)
             {
@@ -527,6 +660,8 @@ namespace FanSelector.UI
 
             Settings.TolerancePercent = tolerance;
             Settings.SetMountingOffsetFt(offsetFt);
+            Settings.DuctSystemType = Chosen(SystemTypeBox);
+            Settings.DuctType = Chosen(DuctTypeBox);
             DialogResult = true;
         }
 

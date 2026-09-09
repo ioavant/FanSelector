@@ -59,6 +59,18 @@ namespace FanSelector.Core
         [DataMember(Name = "families", Order = 2)]
         public List<FamilyMapping> Families { get; set; }
 
+        /// <summary>
+        /// Duct system type used for a generated stub, by name. Empty means "let
+        /// the add-in choose": it then matches the fan connector's own system type,
+        /// which is what Revit would have picked anyway.
+        /// </summary>
+        [DataMember(Name = "ductSystemType", Order = 3)]
+        public string DuctSystemType { get; set; }
+
+        /// <summary>Duct type used for a generated stub, by name. Empty means the first in the project.</summary>
+        [DataMember(Name = "ductType", Order = 4)]
+        public string DuctType { get; set; }
+
         public FanSettings()
         {
             TolerancePercent = DefaultTolerancePercent;

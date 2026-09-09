@@ -43,22 +43,9 @@ namespace FanSelector
             };
             selectData.SetContextualHelp(help);
 
-            PushButtonData optionsData = new PushButtonData(
-                "FanSelectorOptions", "Options",
-                asmPath, "FanSelector.Commands.OptionsCommand")
-            {
-                ToolTip = "Fan families, their parameter mapping, and the search defaults.",
-                LongDescription = "Tells Fan Selector which parameter of each fan family carries air "
-                                + "flow, pressure, motor power and the rest. The mapping is stored next "
-                                + "to the add-in, so it is shared by every Revit version and every "
-                                + "project on this machine.",
-                Image = LoadImage("settings_16.png"),
-                LargeImage = LoadImage("settings_32.png")
-            };
-            optionsData.SetContextualHelp(help);
-
+            // One button only. The options are reached from the Fan Selector
+            // window itself, which is where anyone setting up a family already is.
             ribbonPanel.AddItem(selectData);
-            ribbonPanel.AddItem(optionsData);
 
             // ── About / Help button ───────────────────────────────────────────
             // Every add-in of this brand shares one "About" panel holding a single help button, so

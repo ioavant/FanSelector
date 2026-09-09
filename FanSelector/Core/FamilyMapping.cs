@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Runtime.Serialization;
+using Autodesk.Revit.DB;
 
 namespace FanSelector.Core
 {
@@ -57,15 +58,67 @@ namespace FanSelector.Core
         [DataMember(Name = "extraColumns", Order = 14)]
         public List<string> ExtraColumns { get; set; }
 
+        /// <summary>
+        /// Picture of this fan, shown beside the results. A photograph of the
+        /// actual machine tells an engineer more at a glance than Revit's own
+        /// type preview does, which is why it is worth a setting.
+        /// </summary>
+        [DataMember(Name = "image", Order = 15)]
+        public string ImagePath { get; set; }
+
+        // ── Optional duct stub and closer ──────────────────────────────────────
+
+        /// <summary>
+        /// Whether placing a fan of this family also grows a short duct off one
+        /// connector and caps it with an air terminal carrying the requested air
+        /// flow. Per family rather than a global switch: it makes sense for an
+        /// axial fan sitting in a duct run and not for every fan.
+        /// </summary>
+        [DataMember(Name = "addDuctStub", Order = 16)]
+        public bool AddDuctStub { get; set; }
+
+        /// <summary>Air terminal family used to cap the stub.</summary>
+        [DataMember(Name = "closerFamily", Order = 17)]
+        public string CloserFamily { get; set; }
+
+        /// <summary>Length of the stub in millimetres.</summary>
+        [DataMember(Name = "stubLengthMm", Order = 18)]
+        public double StubLengthMm { get; set; }
+
+        /// <summary>Default stub length: 10 mm, i.e. the 1 cm the stub is meant to be.</summary>
+        public const double DefaultStubLengthMm = 10.0;
+
+        public const string DefaultCloserFamily = "AT_Fan Closer";
+
         public FamilyMapping()
         {
             ExtraColumns = new List<string>();
+            StubLengthMm = DefaultStubLengthMm;
+            CloserFamily = DefaultCloserFamily;
         }
 
         [OnDeserialized]
         private void OnDeserialized(StreamingContext context)
         {
             if (ExtraColumns == null) ExtraColumns = new List<string>();
+            if (StubLengthMm <= 0.0) StubLengthMm = DefaultStubLengthMm;
+            if (string.IsNullOrEmpty(CloserFamily)) CloserFamily = DefaultCloserFamily;
+        }
+
+        /// <summary>The stub length in Revit's internal units.</summary>
+        public double StubLengthFt
+        {
+            get
+            {
+                try { return UnitUtils.ConvertToInternalUnits(StubLengthMm, UnitTypeId.Millimeters); }
+                catch { return 0.0; }
+            }
+        }
+
+        public void SetStubLengthFt(double feet)
+        {
+            try { StubLengthMm = UnitUtils.ConvertFromInternalUnits(feet, UnitTypeId.Millimeters); }
+            catch { StubLengthMm = DefaultStubLengthMm; }
         }
 
         public string Column(FanQuantity quantity)
@@ -155,7 +208,11 @@ namespace FanSelector.Core
                 SpeedParam = SpeedParam,
                 SfpParam = SfpParam,
                 SoundPowerParam = SoundPowerParam,
-                ExtraColumns = new List<string>(ExtraColumns ?? new List<string>())
+                ExtraColumns = new List<string>(ExtraColumns ?? new List<string>()),
+                ImagePath = ImagePath,
+                AddDuctStub = AddDuctStub,
+                CloserFamily = CloserFamily,
+                StubLengthMm = StubLengthMm
             };
         }
 

@@ -30,8 +30,14 @@ namespace FanSelector.Core
         /// transaction — and pressing Esc during the pick is a cancellation, not
         /// an error.
         /// </summary>
+        /// <param name="requestedAirFlow">
+        /// What the user searched for, in internal units. Not the catalogue's own
+        /// figure: it is the duty the system has to carry, and it is what a
+        /// generated stub's terminal is given.
+        /// </param>
         public static PlacementResult Place(UIDocument uidoc, FanCandidate candidate,
-                                            FamilyMapping mapping, double offsetFt)
+                                            FamilyMapping mapping, FanSettings settings,
+                                            double requestedAirFlow)
         {
             if (uidoc == null || candidate == null) return PlacementResult.Fail("Nothing to place.");
 
@@ -77,14 +83,22 @@ namespace FanSelector.Core
                         doc.Regenerate();
                     }
 
-                    XYZ target = new XYZ(point.X, point.Y, point.Z + offsetFt);
+                    XYZ target = new XYZ(point.X, point.Y, point.Z + settings.MountingOffsetFt);
                     FamilyInstance instance = doc.Create.NewFamilyInstance(
                         target, symbol, level, StructuralType.NonStructural);
 
                     string writeNote = WriteFigures(instance, mapping, candidate);
 
+                    string stubNote = mapping.AddDuctStub
+                        ? DuctStub.Build(doc, instance, mapping, settings, requestedAirFlow)
+                        : null;
+
                     transaction.Commit();
-                    return new PlacementResult { Placed = true, Message = Join(typeNote, writeNote) };
+                    return new PlacementResult
+                    {
+                        Placed = true,
+                        Message = Join(Join(typeNote, writeNote), stubNote)
+                    };
                 }
                 catch (Exception exception)
                 {
