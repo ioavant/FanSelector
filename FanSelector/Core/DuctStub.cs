@@ -73,30 +73,130 @@ namespace FanSelector.Core
             FamilyInstance terminal;
             try
             {
-                // Hosting the terminal ON the duct is what Revit's own "Air Terminal
-                // on Duct" placement does; it cuts into the duct and connects.
+                // Placed free rather than hosted on the duct. Hosting lets Revit
+                // decide the orientation, and what it decides is a terminal
+                // tapping into the duct's SIDE — square to the run. Capping the
+                // open end wants the terminal coaxial with it, so it is placed
+                // loose and then aligned onto the connector by hand.
                 terminal = doc.Create.NewFamilyInstance(
-                    open.Origin, closer, duct, StructuralType.NonStructural);
+                    open.Origin, closer, StructuralType.NonStructural);
             }
             catch (Exception exception)
             {
-                return "The stub was created, but the closer could not be placed on it: " + exception.Message;
+                return "The stub was created, but the closer could not be placed: " + exception.Message;
             }
 
             if (terminal == null)
-                return "The stub was created, but the closer could not be placed on it.";
+                return "The stub was created, but the closer could not be placed.";
 
             doc.Regenerate();
 
             var notes = new List<string>();
-            string connectNote = EnsureConnected(terminal, duct);
-            if (connectNote != null) notes.Add(connectNote);
+            string fitNote = FitToEnd(doc, terminal, duct);
+            if (fitNote != null) notes.Add(fitNote);
 
             string flowNote = SetFlow(terminal, requestedAirFlow);
             if (flowNote != null) notes.Add(flowNote);
 
             return notes.Count == 0 ? null
                  : "The fan, its stub and the closer were placed, but: " + string.Join(" ", notes.ToArray());
+        }
+
+        /// <summary>
+        /// Sit the closer squarely on the open end: turn it until its connector
+        /// faces back down the duct, slide it until the two connectors are in the
+        /// same place, and join them.
+        ///
+        /// Two connectors mate when their origins coincide and their axes are
+        /// OPPOSITE — each points into the other — which is why the wanted
+        /// direction is the duct connector's axis negated.
+        /// </summary>
+        private static string FitToEnd(Document doc, FamilyInstance terminal, Duct duct)
+        {
+            int ownId, endId;
+            if (!FreeConnectorId(terminal, out ownId))
+                return "the closer has no free duct connector, so it is not joined to the stub.";
+            if (!FreeConnectorId(duct, out endId))
+                return "the stub's open end could not be found again, so the closer is not joined to it.";
+
+            try
+            {
+                XYZ wanted = ConnectorById(duct, endId).CoordinateSystem.BasisZ.Negate();
+                XYZ facing = ConnectorById(terminal, ownId).CoordinateSystem.BasisZ;
+
+                double angle = facing.AngleTo(wanted);
+                if (angle > 1e-9)
+                {
+                    XYZ axis = facing.CrossProduct(wanted);
+                    // Exactly opposite directions leave no cross product to turn
+                    // about; any perpendicular axis does the half turn.
+                    if (axis.GetLength() < 1e-9) axis = AnyPerpendicular(facing);
+
+                    ElementTransformUtils.RotateElement(doc, terminal.Id,
+                        Line.CreateUnbound(ConnectorById(terminal, ownId).Origin, axis.Normalize()), angle);
+                    doc.Regenerate();
+                }
+
+                // Re-read the connectors: both moved with their elements.
+                XYZ shift = ConnectorById(duct, endId).Origin - ConnectorById(terminal, ownId).Origin;
+                if (shift.GetLength() > 1e-9)
+                {
+                    ElementTransformUtils.MoveElement(doc, terminal.Id, shift);
+                    doc.Regenerate();
+                }
+
+                Connector own = ConnectorById(terminal, ownId);
+                Connector end = ConnectorById(duct, endId);
+                if (!own.IsConnected && !end.IsConnected) own.ConnectTo(end);
+                return null;
+            }
+            catch (Exception exception)
+            {
+                return "the closer could not be aligned to the stub (" + exception.Message + ").";
+            }
+        }
+
+        private static Connector ConnectorById(Element owner, int id)
+        {
+            foreach (Connector connector in Connectors(owner))
+                if (connector.Id == id) return connector;
+            return null;
+        }
+
+        /// <summary>An unconnected connector's id, which survives the element moving.</summary>
+        private static bool FreeConnectorId(Element owner, out int id)
+        {
+            id = -1;
+            foreach (Connector connector in Connectors(owner))
+            {
+                try { if (connector.IsConnected) continue; }
+                catch { continue; }
+                id = connector.Id;
+                return true;
+            }
+            return false;
+        }
+
+        private static IEnumerable<Connector> Connectors(Element owner)
+        {
+            ConnectorManager manager = null;
+            try
+            {
+                FamilyInstance instance = owner as FamilyInstance;
+                if (instance != null && instance.MEPModel != null) manager = instance.MEPModel.ConnectorManager;
+                MEPCurve curve = owner as MEPCurve;
+                if (curve != null) manager = curve.ConnectorManager;
+            }
+            catch { yield break; }
+
+            if (manager == null) yield break;
+            foreach (Connector connector in manager.Connectors) yield return connector;
+        }
+
+        private static XYZ AnyPerpendicular(XYZ direction)
+        {
+            XYZ candidate = Math.Abs(direction.X) < 0.9 ? XYZ.BasisX : XYZ.BasisY;
+            return direction.CrossProduct(candidate);
         }
 
         /// <summary>
@@ -309,42 +409,6 @@ namespace FanSelector.Core
                                                        StringComparison.OrdinalIgnoreCase));
             }
             catch { return null; }
-        }
-
-        /// <summary>
-        /// Hosting the terminal on the duct normally connects it. When it has not,
-        /// the two coincident connectors are joined by hand — without that the
-        /// terminal is decoration and carries no flow.
-        /// </summary>
-        private static string EnsureConnected(FamilyInstance terminal, Duct duct)
-        {
-            try
-            {
-                List<Connector> onTerminal = new List<Connector>();
-                MEPModel model = terminal.MEPModel;
-                if (model == null || model.ConnectorManager == null)
-                    return "the closer has no duct connector, so it is not joined to the stub.";
-
-                foreach (Connector connector in model.ConnectorManager.Connectors)
-                    onTerminal.Add(connector);
-
-                if (onTerminal.Any(c => c.IsConnected)) return null;
-
-                Connector free = OpenEnd(duct);
-                if (free == null) return null;   // the stub is fully connected already
-
-                Connector nearest = onTerminal
-                    .OrderBy(c => c.Origin.DistanceTo(free.Origin))
-                    .FirstOrDefault();
-                if (nearest == null) return null;
-
-                nearest.ConnectTo(free);
-                return null;
-            }
-            catch (Exception exception)
-            {
-                return "the closer could not be joined to the stub (" + exception.Message + ").";
-            }
         }
 
         /// <summary>
