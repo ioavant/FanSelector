@@ -225,7 +225,6 @@ namespace FanSelector.UI
                 FamilyName = family,
                 CatalogPath = Beside(family, ".csv")
             };
-            mapping.ImagePath = Beside(family, ".jpg") ?? Beside(family, ".png");
             Settings.Families.Add(mapping);
             RefreshFamilyList(mapping);
             GuessMapping();
@@ -309,53 +308,21 @@ namespace FanSelector.UI
             LoadMapping(_current);
         }
 
-        // ── Picture ───────────────────────────────────────────────────────────
-
-        private void OnBrowseImage(object sender, RoutedEventArgs e)
+        /// <summary>
+        /// Which of the four built-in pictures this family lands on, so the choice
+        /// is visible even though there is nothing to configure about it.
+        /// </summary>
+        private void ShowPictureHint()
         {
-            if (_current == null) return;
+            if (_current == null) { PictureHint.Text = string.Empty; return; }
 
-            var dialog = new Microsoft.Win32.OpenFileDialog
-            {
-                Title = "Select a picture for " + _current.FamilyName,
-                Filter = "Images (*.png;*.jpg;*.jpeg;*.bmp;*.gif)|*.png;*.jpg;*.jpeg;*.bmp;*.gif"
-                       + "|All files (*.*)|*.*",
-                CheckFileExists = true
-            };
-
-            try
-            {
-                if (!string.IsNullOrEmpty(_current.ImagePath))
-                    dialog.InitialDirectory = Path.GetDirectoryName(_current.ImagePath);
-                else if (!string.IsNullOrEmpty(_current.CatalogPath))
-                    dialog.InitialDirectory = Path.GetDirectoryName(_current.CatalogPath);
-                else if (FanSettings.SamplesFolder != null)
-                    dialog.InitialDirectory = FanSettings.SamplesFolder;
-            }
-            catch { /* a bad remembered folder is not worth failing over */ }
-
-            if (dialog.ShowDialog(this) != true) return;
-            ImageBox.Text = dialog.FileName;   // TextChanged does the rest
-        }
-
-        private void OnImageTextChanged(object sender, TextChangedEventArgs e)
-        {
-            if (_loading || _current == null) return;
-            _current.ImagePath = string.IsNullOrWhiteSpace(ImageBox.Text) ? null : ImageBox.Text.Trim();
-            ShowImageStatus();
-        }
-
-        private void ShowImageStatus()
-        {
-            if (_current == null || string.IsNullOrEmpty(_current.ImagePath))
-            {
-                ImageStatus.Text = "No picture — Revit's type preview will be shown instead.";
-                return;
-            }
-
-            ImageStatus.Text = WindowSupport.ImageFromFile(_current.ImagePath) != null
-                ? "Picture loads correctly."
-                : "That file could not be read as an image.";
+            string picture = FanImages.For(_current.FamilyName);
+            string described = picture == FanImages.Axial ? "the axial fan picture"
+                             : picture == FanImages.Centrifugal ? "the centrifugal fan picture"
+                             : picture == FanImages.InLine ? "the in-line fan picture"
+                             : "the general fan picture, since the name says none of "
+                               + "\"axial\", \"centrifugal\" or \"in-line\"";
+            PictureHint.Text = "Beside the results this family shows " + described + ".";
         }
 
         // ── Duct stub ─────────────────────────────────────────────────────────
@@ -405,8 +372,7 @@ namespace FanSelector.UI
                 foreach (ComboBox combo in _paramCombos.Values) combo.ItemsSource = null;
                 ExtraList.ItemsSource = null;
                 ExtraPicker.ItemsSource = null;
-                ImageBox.Text = string.Empty;
-                ImageStatus.Text = string.Empty;
+                PictureHint.Text = string.Empty;
                 return;
             }
 
@@ -416,8 +382,7 @@ namespace FanSelector.UI
             try
             {
                 CatalogBox.Text = mapping.CatalogPath ?? string.Empty;
-                ImageBox.Text = mapping.ImagePath ?? string.Empty;
-                ShowImageStatus();
+                ShowPictureHint();
 
                 StubBox.IsChecked = mapping.AddDuctStub;
                 StubDetails.IsEnabled = mapping.AddDuctStub;

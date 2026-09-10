@@ -58,13 +58,10 @@ namespace FanSelector.Core
         [DataMember(Name = "extraColumns", Order = 14)]
         public List<string> ExtraColumns { get; set; }
 
-        /// <summary>
-        /// Picture of this fan, shown beside the results. A photograph of the
-        /// actual machine tells an engineer more at a glance than Revit's own
-        /// type preview does, which is why it is worth a setting.
-        /// </summary>
-        [DataMember(Name = "image", Order = 15)]
-        public string ImagePath { get; set; }
+        // The picture shown beside the results is NOT stored here. It follows from
+        // the family's name — see FanImages — because the four pictures shipped
+        // with the add-in cover the shapes a fan comes in and the answer is always
+        // the same for a given name.
 
         // ── Optional duct stub and closer ──────────────────────────────────────
 
@@ -209,7 +206,6 @@ namespace FanSelector.Core
                 SfpParam = SfpParam,
                 SoundPowerParam = SoundPowerParam,
                 ExtraColumns = new List<string>(ExtraColumns ?? new List<string>()),
-                ImagePath = ImagePath,
                 AddDuctStub = AddDuctStub,
                 CloserFamily = CloserFamily,
                 StubLengthMm = StubLengthMm

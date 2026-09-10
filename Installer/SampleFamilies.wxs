@@ -24,9 +24,6 @@
 			<Component Id="SampleAxialCsv" Guid="*">
 				<File Id="SampleAxialCsvFile" KeyPath="yes" Source="InstallerSource\ME_Axial Fan.csv"/>
 			</Component>
-			<Component Id="SampleAxialImage" Guid="*">
-				<File Id="SampleAxialImageFile" KeyPath="yes" Source="InstallerSource\ME_Axial Fan.jpg"/>
-			</Component>
 
 			<Component Id="SampleCentrifugalRfa" Guid="*">
 				<File Id="SampleCentrifugalRfaFile" KeyPath="yes" Source="InstallerSource\ME_Centrifugal Fan.rfa"/>
@@ -34,18 +31,12 @@
 			<Component Id="SampleCentrifugalCsv" Guid="*">
 				<File Id="SampleCentrifugalCsvFile" KeyPath="yes" Source="InstallerSource\ME_Centrifugal Fan.csv"/>
 			</Component>
-			<Component Id="SampleCentrifugalImage" Guid="*">
-				<File Id="SampleCentrifugalImageFile" KeyPath="yes" Source="InstallerSource\ME_Centrifugal Fan.jpg"/>
-			</Component>
 
 			<Component Id="SampleInLineRfa" Guid="*">
 				<File Id="SampleInLineRfaFile" KeyPath="yes" Source="InstallerSource\ME_Venta InLine.rfa"/>
 			</Component>
 			<Component Id="SampleInLineCsv" Guid="*">
 				<File Id="SampleInLineCsvFile" KeyPath="yes" Source="InstallerSource\ME_Venta InLine.csv"/>
-			</Component>
-			<Component Id="SampleInLineImage" Guid="*">
-				<File Id="SampleInLineImageFile" KeyPath="yes" Source="InstallerSource\ME_Venta InLine.jpg"/>
 			</Component>
 
 		</ComponentGroup>

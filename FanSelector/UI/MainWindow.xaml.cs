@@ -29,11 +29,14 @@ namespace FanSelector.UI
         private ForgeTypeId _pressureSpec;
 
         /// <summary>
-        /// The picture of the selected family, if it has one. Loaded once per
-        /// family rather than per row: it is a photograph of the machine, and it
-        /// changes when the fan does, exactly as the old version behaved.
+        /// The picture of the selected family. One of the four shipped inside the
+        /// add-in, chosen from the family's name, and changing when the fan does —
+        /// exactly as the old version behaved.
         /// </summary>
         private System.Windows.Media.ImageSource _familyImage;
+
+        /// <summary>Whether the fan about to be placed should get a duct stub.</summary>
+        public bool StubRequested { get { return StubBox.IsChecked == true; } }
 
         /// <summary>
         /// The air flow the last search asked for, in internal units. Handed to
@@ -100,8 +103,9 @@ namespace FanSelector.UI
             ResultsGrid.ItemsSource = null;
             InsertButton.IsEnabled = false;
 
-            _familyImage = mapping == null ? null : WindowSupport.ImageFromFile(mapping.ImagePath);
+            _familyImage = mapping == null ? null : WindowSupport.Image(FanImages.For(mapping.FamilyName));
             PreviewImage.Source = _familyImage;
+            StubBox.IsChecked = mapping != null && mapping.AddDuctStub;
 
             if (mapping == null)
             {
@@ -260,23 +264,7 @@ namespace FanSelector.UI
 
         private void OnResultSelected(object sender, SelectionChangedEventArgs e)
         {
-            var candidate = ResultsGrid.SelectedItem as FanCandidate;
-            InsertButton.IsEnabled = candidate != null;
-
-            // The family's own photograph wins when it has one. Otherwise fall back
-            // to Revit's type preview, which only exists for a type the model
-            // actually has — most catalogue rows have none.
-            if (_familyImage != null) { PreviewImage.Source = _familyImage; return; }
-
-            PreviewImage.Source = candidate == null || candidate.Symbol == null
-                ? null
-                : WindowSupport.FromBitmap(Preview(candidate.Symbol));
-        }
-
-        private static System.Drawing.Bitmap Preview(FamilySymbol symbol)
-        {
-            try { return symbol.GetPreviewImage(new System.Drawing.Size(256, 256)); }
-            catch { return null; }
+            InsertButton.IsEnabled = ResultsGrid.SelectedItem is FanCandidate;
         }
 
         private void OnResultDoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)

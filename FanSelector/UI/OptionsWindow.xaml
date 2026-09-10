@@ -159,17 +159,7 @@
           </DockPanel>
           <TextBlock x:Name="CatalogStatus" Style="{StaticResource Hint}" />
 
-          <!-- Picture -->
-          <TextBlock Text="Picture" Style="{StaticResource Section}" Margin="0,10,0,4" />
-          <TextBlock Style="{StaticResource Hint}" Margin="0,0,0,6"
-                     Text="Shown beside the results while this family is selected. A photograph of the machine says more at a glance than a wireframe; without one, Revit's own type preview is used." />
-          <DockPanel>
-            <Button DockPanel.Dock="Right" x:Name="BrowseImageButton" Content="Browse…"
-                    Click="OnBrowseImage" Margin="6,0,0,0" MinWidth="80" />
-            <TextBox x:Name="ImageBox" VerticalContentAlignment="Center"
-                     TextChanged="OnImageTextChanged" />
-          </DockPanel>
-          <TextBlock x:Name="ImageStatus" Style="{StaticResource Hint}" />
+          <TextBlock x:Name="PictureHint" Style="{StaticResource Hint}" Margin="0,8,0,0" />
 
           <!-- Mapping -->
           <TextBlock Text="Figures" Style="{StaticResource Section}" />

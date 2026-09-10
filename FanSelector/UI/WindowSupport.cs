@@ -59,31 +59,6 @@ namespace FanSelector.UI
         }
 
         /// <summary>
-        /// A picture from disk, loaded so the file is NOT left locked — a fan photo
-        /// sitting in the install folder must stay replaceable while Revit runs.
-        /// Null when there is no such file or it is not an image.
-        /// </summary>
-        public static BitmapImage ImageFromFile(string path)
-        {
-            if (string.IsNullOrEmpty(path)) return null;
-            try
-            {
-                if (!File.Exists(path)) return null;
-                using (FileStream stream = File.OpenRead(path))
-                {
-                    BitmapImage image = new BitmapImage();
-                    image.BeginInit();
-                    image.StreamSource = stream;
-                    image.CacheOption = BitmapCacheOption.OnLoad;   // read now, release the file
-                    image.EndInit();
-                    image.Freeze();
-                    return image;
-                }
-            }
-            catch { return null; }
-        }
-
-        /// <summary>
         /// Revit hands out type previews as GDI+ bitmaps. Converting one to
         /// something WPF can show means an HBITMAP, which has to be released by
         /// hand or the add-in leaks a GDI object per preview.

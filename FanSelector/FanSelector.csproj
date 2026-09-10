@@ -93,6 +93,7 @@
     <!-- Product artwork. Brand artwork (web_icon.png, logo.png) is contributed
          per brand by _branding\Branding.targets, not listed here. -->
     <EmbeddedResource Include="Resources\*.png" />
+    <EmbeddedResource Include="Resources\*.jpg" />
     <None Include="..\version.json" />
   </ItemGroup>
 
