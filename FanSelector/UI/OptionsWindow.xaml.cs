@@ -281,7 +281,8 @@ namespace FanSelector.UI
 
             foreach (QuantityInfo info in Quantities.All)
                 if (string.IsNullOrEmpty(_current.Param(info.Quantity)))
-                    _current.SetParam(info.Quantity, ParameterScanner.GuessParam(catalog, info, _units));
+                    _current.SetParam(info.Quantity, ParameterScanner.GuessParam(
+                        _doc, _current.FamilyName, catalog, info, _units));
         }
 
         // ── Catalogue file ────────────────────────────────────────────────────
@@ -528,19 +529,27 @@ namespace FanSelector.UI
         {
             string stored = _current.Param(info.Quantity);
             var choices = new List<ParamChoice> { ParamChoice.None() };
-            choices.AddRange(ParameterScanner.Params(_catalog, info, showAll, _units));
+            choices.AddRange(ParameterScanner.Params(
+                _doc, _current.FamilyName, _catalog, info, showAll, _units));
 
             if (!string.IsNullOrEmpty(stored) &&
                 !choices.Any(c => string.Equals(c.Name, stored, StringComparison.OrdinalIgnoreCase)))
             {
-                choices.Add(new ParamChoice { Name = stored, SpecLabel = "(not found on this family)" });
+                // The list holds only parameters that can actually be written, so
+                // a stored name missing from it is usually a read-only one — say
+                // which, rather than leaving the user to find out at placement.
+                choices.Add(new ParamChoice
+                {
+                    Name = stored,
+                    SpecLabel = "(read-only, or not on this family — cannot be written)"
+                });
             }
 
             combo.ItemsSource = choices;
             combo.DisplayMemberPath = "Label";
             combo.SelectedItem = choices.FirstOrDefault(
                 c => string.Equals(c.Name, stored, StringComparison.OrdinalIgnoreCase)) ?? choices[0];
-            combo.IsEnabled = _catalog != null && _catalog.IsUsable;
+            combo.IsEnabled = true;
         }
 
         private void OnColumnChanged(object sender, SelectionChangedEventArgs e)

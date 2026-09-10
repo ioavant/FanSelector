@@ -39,9 +39,9 @@ namespace FanSelector.Core
             if (systemTypeId == ElementId.InvalidElementId)
                 return "The fan was placed, but the project has no duct system type, so no stub was grown.";
 
-            ElementId ductTypeId = ResolveDuctType(doc, settings);
+            ElementId ductTypeId = ResolveDuctType(doc, settings, outlet);
             if (ductTypeId == ElementId.InvalidElementId)
-                return "The fan was placed, but the project has no duct type, so no stub was grown.";
+                return "The fan was placed, but the project has no round duct type to grow a stub with.";
 
             string trouble;
             Duct duct = CreateDuct(doc, systemTypeId, ductTypeId, outlet, mapping.StubLengthFt, out trouble);
@@ -185,7 +185,14 @@ namespace FanSelector.Core
             return types[0].Id;
         }
 
-        private static ElementId ResolveDuctType(Document doc, FanSettings settings)
+        /// <summary>
+        /// The duct type for the stub. Shape matters and is not negotiable: a
+        /// round connector cannot start a rectangular duct, and Duct.Create
+        /// rejects the type outright rather than adapting — which is what "the
+        /// duct type ductTypeId is not valid duct type" means. So the project's
+        /// first duct type is not good enough; it has to be one of the right shape.
+        /// </summary>
+        private static ElementId ResolveDuctType(Document doc, FanSettings settings, Connector outlet)
         {
             List<DuctType> types;
             try
@@ -199,14 +206,27 @@ namespace FanSelector.Core
 
             if (types.Count == 0) return ElementId.InvalidElementId;
 
+            ConnectorProfileType shape;
+            try { shape = outlet.Shape; }
+            catch { shape = ConnectorProfileType.Round; }
+
+            List<DuctType> fitting = types.Where(t => ShapeOf(t) == shape).ToList();
+
             if (!string.IsNullOrEmpty(settings.DuctType))
             {
-                DuctType chosen = types.FirstOrDefault(
+                // An explicit choice still has to be able to carry the connector.
+                DuctType chosen = fitting.FirstOrDefault(
                     t => string.Equals(t.Name, settings.DuctType, StringComparison.OrdinalIgnoreCase));
                 if (chosen != null) return chosen.Id;
             }
 
-            return types[0].Id;
+            return fitting.Count > 0 ? fitting[0].Id : ElementId.InvalidElementId;
+        }
+
+        private static ConnectorProfileType ShapeOf(DuctType type)
+        {
+            try { return type.Shape; }
+            catch { return ConnectorProfileType.Invalid; }
         }
 
         /// <summary>

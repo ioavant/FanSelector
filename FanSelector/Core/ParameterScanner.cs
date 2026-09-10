@@ -95,6 +95,40 @@ namespace FanSelector.Core
             catch { return new List<FamilySymbol>(); }
         }
 
+        /// <summary>
+        /// A placed instance of the family, if the project has one. It is the only
+        /// place project and shared parameters bound to the category can be seen.
+        /// </summary>
+        public static FamilyInstance ProbeInstance(Document doc, string familyName)
+        {
+            if (string.IsNullOrEmpty(familyName)) return null;
+            try
+            {
+                return new FilteredElementCollector(doc)
+                    .OfClass(typeof(FamilyInstance))
+                    .OfCategory(BuiltInCategory.OST_MechanicalEquipment)
+                    .Cast<FamilyInstance>()
+                    .FirstOrDefault(i => i.Symbol != null && i.Symbol.Family != null &&
+                                         string.Equals(i.Symbol.Family.Name, familyName,
+                                                       StringComparison.OrdinalIgnoreCase));
+            }
+            catch { return null; }
+        }
+
+        private static IEnumerable<Parameter> Enumerate(Element element)
+        {
+            ParameterSet set;
+            try { set = element.Parameters; }
+            catch { yield break; }
+
+            foreach (Parameter parameter in set)
+            {
+                if (parameter == null || parameter.Definition == null) continue;
+                if (string.IsNullOrEmpty(parameter.Definition.Name)) continue;
+                yield return parameter;
+            }
+        }
+
         /// <summary>Air terminal family names loaded in the project — the pool for a stub closer.</summary>
         public static List<string> AirTerminalFamilies(Document doc)
         {
@@ -234,36 +268,56 @@ namespace FanSelector.Core
         // ── Family parameters: where a figure is WRITTEN to ────────────────────
 
         /// <summary>
-        /// Parameters of the family a figure could be written to. Instance
-        /// parameters first in spirit — they are the ones that normally matter —
-        /// but the list is alphabetical and each entry says which it is.
+        /// Parameters a figure could be written to on a placed fan.
+        ///
+        /// A placed instance is the better source and is used first: it shows
+        /// PROJECT and SHARED parameters bound to the category, which the family
+        /// definition cannot see at all — "Override AirFlow" is exactly such a
+        /// parameter — and its IsReadOnly is the answer that actually matters,
+        /// since a family parameter can be writable in the family and driven by a
+        /// formula or a connector on the instance.
+        ///
+        /// The family's own instance parameters fill in behind it, so a project
+        /// with none of this family placed yet still offers something.
         /// </summary>
-        public static List<ParamChoice> Params(FamilyCatalog catalog, QuantityInfo quantity,
-                                               bool showAll, Units units)
+        public static List<ParamChoice> Params(Document doc, string familyName, FamilyCatalog catalog,
+                                               QuantityInfo quantity, bool showAll, Units units)
         {
-            var choices = new List<ParamChoice>();
-            if (catalog == null || !catalog.IsUsable) return choices;
+            var byName = new Dictionary<string, ParamChoice>(StringComparer.OrdinalIgnoreCase);
 
-            foreach (CatalogParameter parameter in catalog.Parameters)
+            FamilyInstance probe = ProbeInstance(doc, familyName);
+            if (probe != null)
             {
-                if (parameter.IsReadOnly) continue;
-                if (!showAll && !Quantities.AcceptsSpec(quantity, parameter.Spec)) continue;
-                choices.Add(Describe(parameter, units));
+                foreach (Parameter parameter in Enumerate(probe))
+                {
+                    if (parameter.IsReadOnly) continue;
+                    ForgeTypeId spec = RevitUnits.SpecOf(parameter);
+                    if (!showAll && !Quantities.AcceptsSpec(quantity, spec)) continue;
+
+                    string name = parameter.Definition.Name;
+                    if (byName.ContainsKey(name)) continue;
+                    byName[name] = new ParamChoice
+                    {
+                        Name = name,
+                        SpecLabel = RevitUnits.SpecLabel(spec),
+                        UnitSymbol = RevitUnits.Symbol(units, spec),
+                        IsInstance = true
+                    };
+                }
             }
 
-            return Sorted(choices);
-        }
+            if (catalog != null && catalog.IsUsable)
+            {
+                foreach (CatalogParameter parameter in catalog.Parameters)
+                {
+                    if (parameter.IsReadOnly) continue;
+                    if (!showAll && !Quantities.AcceptsSpec(quantity, parameter.Spec)) continue;
+                    if (byName.ContainsKey(parameter.Name)) continue;
+                    byName[parameter.Name] = Describe(parameter, units);
+                }
+            }
 
-        /// <summary>Every writable parameter, whatever its kind.</summary>
-        public static List<ParamChoice> AllParams(FamilyCatalog catalog, Units units)
-        {
-            var choices = new List<ParamChoice>();
-            if (catalog == null || !catalog.IsUsable) return choices;
-
-            foreach (CatalogParameter parameter in catalog.Parameters)
-                if (!parameter.IsReadOnly) choices.Add(Describe(parameter, units));
-
-            return Sorted(choices);
+            return Sorted(byName.Values.ToList());
         }
 
         /// <summary>
@@ -271,9 +325,10 @@ namespace FanSelector.Core
         /// instance parameter, because a type parameter would be shared by every
         /// fan of that type and writing one is almost never the intent.
         /// </summary>
-        public static string GuessParam(FamilyCatalog catalog, QuantityInfo quantity, Units units)
+        public static string GuessParam(Document doc, string familyName, FamilyCatalog catalog,
+                                        QuantityInfo quantity, Units units)
         {
-            List<ParamChoice> matches = Params(catalog, quantity, false, units);
+            List<ParamChoice> matches = Params(doc, familyName, catalog, quantity, false, units);
             if (matches.Count == 0) return null;
 
             foreach (string hint in quantity.NameHints)
