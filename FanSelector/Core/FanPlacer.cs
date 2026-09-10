@@ -132,9 +132,14 @@ namespace FanSelector.Core
             problem = null;
             if (candidate.Symbol != null) return candidate.Symbol;
 
+            CatalogFile file = CatalogFile.For(mapping.CatalogPath);
+            string typeColumn = FanSearch.EffectiveTypeColumn(doc, mapping, file);
+            List<string> wanted = FanSearch.TypeNameCandidates(typeColumn, candidate.Row, file);
+            if (wanted.Count == 0) wanted.Add(candidate.TypeName);
+
             // Between searching and inserting, somebody may have loaded it.
-            FamilySymbol already = Find(doc, mapping.FamilyName, candidate.TypeName);
-            if (already != null) return already;
+            FamilySymbol already = FindAny(doc, mapping.FamilyName, wanted);
+            if (already != null) return Accept(already, candidate, ref note);
 
             string familyFile = FamilyFileFor(mapping);
             if (familyFile == null)
@@ -161,26 +166,70 @@ namespace FanSelector.Core
             // LoadFamily reports false when the family was already present, which
             // says nothing about whether the wanted type arrived — so look rather
             // than trust the return value.
-            FamilySymbol loaded = Find(doc, mapping.FamilyName, candidate.TypeName);
+            FamilySymbol loaded = FindAny(doc, mapping.FamilyName, wanted);
             if (loaded == null)
             {
-                problem = "The catalogue line \"" + candidate.Designation + "\" needs the family type \""
-                        + candidate.TypeName + "\", and the family has no such type — not in this project "
-                        + "and not in:\n" + familyFile + "\n\n"
-                        + "Options shows which catalogue column names the Revit type; if that is pointing "
-                        + "at the wrong column, every line will ask for a type that does not exist.";
+                problem = "The catalogue line \"" + candidate.Designation + "\" could not be matched to any "
+                        + "type of \"" + mapping.FamilyName + "\".\n\nLooked for: "
+                        + string.Join(", ", wanted.ToArray())
+                        + "\n\n" + Existing(doc, mapping.FamilyName)
+                        + "\n\nSet \"Revit type name from\" in Options to the catalogue column holding "
+                        + "those names.";
                 return null;
             }
 
-            note = "The type \"" + candidate.TypeName + "\" was not in the model, so the family was loaded "
-                 + "from its file. Types already in the project were left as they were.";
-            return loaded;
+            note = "The type \"" + loaded.Name + "\" was not in the model, so the family was loaded from "
+                 + "its file. Types already in the project were left as they were.";
+            return Accept(loaded, candidate, ref note);
         }
 
-        private static FamilySymbol Find(Document doc, string familyName, string typeName)
+        /// <summary>
+        /// Take the type that was actually found, and say so when it is not the
+        /// one the mapping asked for — that means the type column is pointing
+        /// somewhere else, and the user should know rather than wonder.
+        /// </summary>
+        private static FamilySymbol Accept(FamilySymbol symbol, FanCandidate candidate, ref string note)
         {
-            return ParameterScanner.SymbolsOf(doc, familyName).FirstOrDefault(
-                s => string.Equals(s.Name, typeName, StringComparison.OrdinalIgnoreCase));
+            if (!string.Equals(symbol.Name, candidate.TypeName, StringComparison.OrdinalIgnoreCase))
+                note = Join(note,
+                    "The mapping expected the family type \"" + candidate.TypeName + "\" for line \""
+                    + candidate.Designation + "\", but the family has \"" + symbol.Name + "\", which was "
+                    + "used instead. Set \"Revit type name from\" in Options to the column holding \""
+                    + symbol.Name + "\" so this is not a guess every time.");
+
+            candidate.TypeName = symbol.Name;
+            return symbol;
+        }
+
+        /// <summary>
+        /// What the family DOES have. Without this a failure says only what was
+        /// missing, which leaves the user — and anyone they ask — guessing at the
+        /// naming the family actually uses.
+        /// </summary>
+        private static string Existing(Document doc, string familyName)
+        {
+            List<string> names = ParameterScanner.SymbolsOf(doc, familyName)
+                .Select(s => s.Name).ToList();
+
+            if (names.Count == 0)
+                return "The family has no types in this project at all.";
+
+            const int show = 20;
+            string listed = string.Join(", ", names.Take(show).ToArray());
+            if (names.Count > show) listed += ", … (" + (names.Count - show) + " more)";
+            return "The " + names.Count + " types it does have are named: " + listed;
+        }
+
+        private static FamilySymbol FindAny(Document doc, string familyName, List<string> typeNames)
+        {
+            List<FamilySymbol> symbols = ParameterScanner.SymbolsOf(doc, familyName);
+            foreach (string wanted in typeNames)
+            {
+                FamilySymbol hit = symbols.FirstOrDefault(
+                    s => string.Equals(s.Name, wanted, StringComparison.OrdinalIgnoreCase));
+                if (hit != null) return hit;
+            }
+            return null;
         }
 
         /// <summary>The .rfa beside the catalogue, under the same name, or null.</summary>

@@ -192,16 +192,26 @@ namespace FanSelector.Core
         /// looks right, or the only kind match there is. Null when guessing would
         /// be a coin toss.
         /// </summary>
-        public static string GuessColumn(CatalogFile file, QuantityInfo quantity)
+        /// <param name="taken">
+        /// Columns already claimed by another figure. Without this, every
+        /// quantity that accepts a plain Number — speed, SFP, sound power —
+        /// grabs the same RPM column, and the results grid shows it three times.
+        /// </param>
+        public static string GuessColumn(CatalogFile file, QuantityInfo quantity, ICollection<string> taken)
         {
-            List<CatalogColumn> matches = Columns(file, quantity, false);
+            List<CatalogColumn> matches = Columns(file, quantity, false)
+                .Where(c => taken == null || !taken.Contains(c.Name, StringComparer.OrdinalIgnoreCase))
+                .ToList();
 
             foreach (string hint in quantity.NameHints)
                 foreach (CatalogColumn column in matches)
                     if (column.Name.IndexOf(hint, StringComparison.CurrentCultureIgnoreCase) >= 0)
                         return column.Name;
 
-            return matches.Count == 1 ? matches[0].Name : null;
+            // One candidate is only convincing when the figure is a required one.
+            // For an optional figure it is just as likely the catalogue does not
+            // carry it at all, and a wrong guess is worse than none.
+            return matches.Count == 1 && quantity.Required ? matches[0].Name : null;
         }
 
         /// <summary>

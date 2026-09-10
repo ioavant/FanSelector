@@ -63,20 +63,57 @@ namespace FanSelector.Core
         }
 
         /// <summary>
+        /// Which column names the Revit type: the user's choice, or a guess when
+        /// they have not made one. Guessing here and not only when a family is
+        /// first added is what lets a mapping saved before this existed keep
+        /// working without anyone opening Options.
+        /// </summary>
+        public static string EffectiveTypeColumn(Document doc, FamilyMapping mapping, CatalogFile file)
+        {
+            if (mapping == null) return null;
+            if (!string.IsNullOrEmpty(mapping.TypeColumn)) return mapping.TypeColumn;
+            return ParameterScanner.GuessTypeColumn(doc, mapping.FamilyName, file);
+        }
+
+        /// <summary>
         /// The Revit family type a catalogue line asks for. Falls back to the
         /// line's first cell, which is right for a catalogue whose designation IS
-        /// the type name and wrong only for one that has a separate size column —
-        /// which is what the mapping is for.
+        /// the type name and wrong only for one that has a separate size column.
         /// </summary>
-        public static string TypeNameFor(FamilyMapping mapping, CatalogRow row)
+        public static string TypeNameFor(string typeColumn, CatalogRow row)
         {
             if (row == null) return null;
-            if (mapping != null && !string.IsNullOrEmpty(mapping.TypeColumn))
+            if (!string.IsNullOrEmpty(typeColumn))
             {
-                string named = row.Text(mapping.TypeColumn);
+                string named = row.Text(typeColumn);
                 if (!string.IsNullOrEmpty(named)) return named;
             }
             return row.TypeName;
+        }
+
+        /// <summary>
+        /// Every value on a line that could plausibly be a Revit type name, best
+        /// first: the mapped column, then the designation, then every other
+        /// column. Placement walks this rather than failing on the first miss —
+        /// a wrongly mapped column should cost the user a note, not a dead end.
+        /// </summary>
+        public static List<string> TypeNameCandidates(string typeColumn, CatalogRow row, CatalogFile file)
+        {
+            var names = new List<string>();
+            if (row == null) return names;
+
+            Action<string> add = value =>
+            {
+                if (!string.IsNullOrEmpty(value) &&
+                    !names.Contains(value, StringComparer.OrdinalIgnoreCase)) names.Add(value);
+            };
+
+            add(TypeNameFor(typeColumn, row));
+            add(row.TypeName);
+            if (file != null && file.IsUsable)
+                foreach (CatalogColumn column in file.Columns) add(row.Text(column.Name));
+
+            return names;
         }
 
         public static SearchResult Run(Document doc, FamilyMapping mapping,
@@ -99,6 +136,7 @@ namespace FanSelector.Core
             }
 
             Dictionary<string, FamilySymbol> loaded = LoadedTypes(doc, mapping.FamilyName);
+            string typeColumn = EffectiveTypeColumn(doc, mapping, file);
             Units units = doc.GetUnits();
             double tolerance = Math.Max(tolerancePercent, 0.0) / 100.0;
             int unreadable = 0;
@@ -116,8 +154,8 @@ namespace FanSelector.Core
                 if (deviation > tolerance) continue;
 
                 FamilySymbol symbol;
-                loaded.TryGetValue(TypeNameFor(mapping, row) ?? string.Empty, out symbol);
-                result.Candidates.Add(Build(row, symbol, mapping, file, units,
+                loaded.TryGetValue(TypeNameFor(typeColumn, row) ?? string.Empty, out symbol);
+                result.Candidates.Add(Build(row, symbol, mapping, file, units, typeColumn,
                                             airFlow.Value, pressure.Value, deviation));
             }
 
@@ -142,13 +180,13 @@ namespace FanSelector.Core
         }
 
         private static FanCandidate Build(CatalogRow row, FamilySymbol symbol, FamilyMapping mapping,
-                                          CatalogFile file, Units units,
+                                          CatalogFile file, Units units, string typeColumn,
                                           double airFlow, double pressure, double deviation)
         {
             var candidate = new FanCandidate
             {
                 Designation = row.TypeName,
-                TypeName = TypeNameFor(mapping, row),
+                TypeName = TypeNameFor(typeColumn, row),
                 Symbol = symbol,
                 Row = row,
                 AirFlow = airFlow,

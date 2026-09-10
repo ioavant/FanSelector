@@ -266,13 +266,22 @@ namespace FanSelector.UI
             if (string.IsNullOrEmpty(_current.TypeColumn))
                 _current.TypeColumn = ParameterScanner.GuessTypeColumn(_doc, _current.FamilyName, file);
 
+            // A column already claimed by one figure is off the table for the
+            // next, so speed, SFP and sound power cannot all land on RPM.
+            var takenColumns = new List<string>();
             foreach (QuantityInfo info in Quantities.All)
             {
-                if (string.IsNullOrEmpty(_current.Column(info.Quantity)))
-                    _current.SetColumn(info.Quantity, ParameterScanner.GuessColumn(file, info));
+                string existing = _current.Column(info.Quantity);
+                if (!string.IsNullOrEmpty(existing)) { takenColumns.Add(existing); continue; }
+
+                string guess = ParameterScanner.GuessColumn(file, info, takenColumns);
+                _current.SetColumn(info.Quantity, guess);
+                if (!string.IsNullOrEmpty(guess)) takenColumns.Add(guess);
+            }
+
+            foreach (QuantityInfo info in Quantities.All)
                 if (string.IsNullOrEmpty(_current.Param(info.Quantity)))
                     _current.SetParam(info.Quantity, ParameterScanner.GuessParam(catalog, info, _units));
-            }
         }
 
         // ── Catalogue file ────────────────────────────────────────────────────
@@ -350,7 +359,7 @@ namespace FanSelector.UI
                 StringComparer.OrdinalIgnoreCase);
 
             int hits = _file.Rows.Count(
-                r => loaded.Contains(FanSearch.TypeNameFor(_current, r) ?? string.Empty));
+                r => loaded.Contains(FanSearch.TypeNameFor(_current.TypeColumn, r) ?? string.Empty));
 
             if (loaded.Count == 0)
             {
@@ -458,6 +467,11 @@ namespace FanSelector.UI
                 StubLengthBox.Text = RevitUnits.Format(_units, SpecTypeId.Length, mapping.StubLengthFt);
 
                 _file = CatalogFile.For(mapping.CatalogPath);
+
+                // Fill in a type column the stored mapping never had — the setting
+                // is newer than mappings people already saved.
+                if (string.IsNullOrEmpty(mapping.TypeColumn))
+                    mapping.TypeColumn = ParameterScanner.GuessTypeColumn(_doc, mapping.FamilyName, _file);
 
                 // Reading the family definition is the slow part, and it is only
                 // needed for the "write onto the fan" half.
