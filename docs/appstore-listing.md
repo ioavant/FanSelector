@@ -16,25 +16,25 @@ Fan Selector turns the type catalogue that already comes with a fan family into 
 No separate database to maintain, no proprietary family to adopt: the catalogue is the database.
 
 HOW IT WORKS
-A Revit type catalogue is the .csv beside a .rfa that tells Revit which types the family offers. It already holds the numbers: one row per type, columns for air flow, pressure, motor power, speed. Fan Selector reads that same file, so the selection data and the family's type list cannot drift apart.
+A fan catalogue is the .csv beside a .rfa: one line per duty point, columns for air flow, pressure, motor power, speed. A line's designation ("710/9/30/5Z") is not a Revit type — the family holds one type per physical size ("710"), and several duty points share it. Fan Selector reads the catalogue, resolves each line to its type, and puts the figures on the placed fan.
 
 Setting up a family takes one pass through Options and has two halves. First, which column carries which figure: each gets a dropdown of the catalogue's columns, filtered to those whose declared unit fits, with the likely match pre-selected. Second — optional — which family parameter each figure is written onto when a fan is placed. That second half is what makes it work with real fan families, which normally declare air flow and pressure as instance parameters holding nothing until something fills them.
 
 KEY FEATURES
-- Searches the WHOLE catalogue, not only the types already loaded. A family may offer two hundred types where a project has a handful; picking a match the project does not have loads the family from its file so Revit applies the catalogue itself.
-- Works with any Mechanical Equipment fan family that has a type catalogue.
+- Searches the WHOLE catalogue — two hundred duty points, not the handful of sizes in the model. A type the project has is used as it stands; a missing one comes from the family file, touching nothing already there.
+- Works with any Mechanical Equipment fan family with a catalogue.
 - Two-part mapping per family — read from a catalogue column, write onto a family parameter — with unit-aware dropdowns and automatic guessing, so a new family usually means confirming what was proposed.
 - Six figures: air flow, pressure, motor power, speed, efficiency / specific fan power, sound power. The first two drive the search; the rest are shown so you can judge the choice.
 - Any number of extra columns: frame size, weight, order code, whatever the file has.
 - Ranking, not just filtering. Sort by closeness to the duty, by lowest specific fan power, by quietest, or by lowest motor power — whatever actually decides the selection.
 - Units come from the catalogue's own header and are shown in the project's units, so a file in CFM and inches of water works as well as one in m³/h and Pa. An unrecognised unit is reported, not assumed.
-- Adjustable tolerance on both figures, with a default you set once.
+- Adjustable tolerance on both figures, with a default set once.
 - Places the matching type on the correct level, with an optional mounting offset above the point you click.
 - A photograph of the fan beside the results — axial, centrifugal or in-line, picked from the family's name, with a general one for anything else. All four ship inside the add-in; nothing to set.
 - Optional duct stub, per family: placing the fan also grows a short round duct off one connector, at that connector's own diameter, and caps it with an air terminal carrying the air flow you searched for — so the fan arrives with a real connected duty instead of as an unconnected object. The system type follows the fan's connector unless you pick one.
 - When a catalogue has nothing suitable to map, the dialog says so and why instead of showing an empty list, and a "Copy details" button puts its columns and the family's parameters on the clipboard.
-- The mapping is stored once per machine, shared by every Revit version and project on it.
-- Three example fan families with working type catalogues are installed with it.
+- The mapping is stored once per machine, shared by every Revit version and project.
+- Three example fan families with catalogues are installed with it.
 
 WHO IT'S FOR
 MEP engineers and HVAC modellers who select fans in Revit and are tired of doing it in a manufacturer's separate program and then hunting for the matching type by hand. Especially useful for an office with its own fan library: point each family at its catalogue once and the whole library becomes searchable.
@@ -74,11 +74,12 @@ For support, contact us at yoav@vixeldorf.com or via <a href="https://www.vixeld
 ## Known Issues
 - Only families in the Mechanical Equipment category are offered.<br>
 - An unrecognised unit token leaves values exactly as written; the dialog says so rather than guessing.<br>
-- Placing a type the project does not have loads the whole family from its .rfa, so that file has to sit beside the .csv under the same name — which is what Revit requires of a catalogue anyway. Revit applies the catalogue, so every type in it arrives, not only the one picked.<br>
+- Placing a size the project lacks loads the family from its .rfa, so that file must sit beside the .csv under the same name. Existing types are never overwritten.<br>
+- Which catalogue column names the Revit type is a per-family setting, guessed by checking each column against the types the project has; the dialog reports how many lines match.<br>
 - Listing the family parameters to write onto opens the family definition briefly; in-place and system families cannot be read that way.<br>
 - The mapping is stored per machine, not per project.<br>
 - Fans are placed hosted on a level; face-hosted families are not supported.<br>
-- The duct stub needs its air terminal family loaded, and a duct type and system type to exist. If the terminal's Flow turns out to be calculated by the system rather than settable, the stub is still built and it is reported.
+- The duct stub needs its air terminal family loaded, plus a duct type and system type. A terminal whose Flow the system calculates cannot be set, and that is reported.
 
 ## Learn More Url
 https://www.vixeldorf.com

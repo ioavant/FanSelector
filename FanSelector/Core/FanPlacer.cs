@@ -52,7 +52,7 @@ namespace FanSelector.Core
             XYZ point;
             try
             {
-                point = uidoc.Selection.PickPoint("Click the insertion point for " + candidate.TypeName);
+                point = uidoc.Selection.PickPoint("Click the insertion point for " + candidate.Designation);
             }
             catch (Autodesk.Revit.Exceptions.OperationCanceledException)
             {
@@ -115,16 +115,15 @@ namespace FanSelector.Core
         }
 
         /// <summary>
-        /// The type to place, loaded from the family file when the project does
-        /// not have it.
+        /// The type to place. If the project already has it — which it normally
+        /// does, because a family holds one type per physical size and a project
+        /// tends to have the sizes it uses — that one is used untouched. Only when
+        /// it is missing is the family file loaded, and then without overwriting
+        /// anything already there.
         ///
-        /// Revit is what applies a type catalogue, and LoadFamily is how it is
-        /// asked to: given a .rfa with a .csv of the same name beside it, it
-        /// builds every type the catalogue defines, with every parameter the
-        /// catalogue sets. Reconstructing a single type by hand instead — copying
-        /// a loaded one and writing the catalogue columns onto it — produced fans
-        /// of the wrong size, because a catalogue drives more of a family than the
-        /// columns that can be written back through a type parameter.
+        /// Note this looks for the TYPE name, not the catalogue designation: the
+        /// line "710/9/30/5Z" asks for the family's "710", and no amount of
+        /// loading will produce a type called "710/9/30/5Z".
         /// </summary>
         private static FamilySymbol Resolve(Document doc, FanCandidate candidate,
                                             FamilyMapping mapping, out string note, out string problem)
@@ -142,8 +141,7 @@ namespace FanSelector.Core
             {
                 problem = "The type \"" + candidate.TypeName + "\" is not in this project, and the family "
                         + "file it should come from was not found beside the catalogue.\n\n"
-                        + "Revit expects a type catalogue and its family to sit together under the same "
-                        + "name. Put the .rfa next to:\n" + mapping.CatalogPath;
+                        + "Put the .rfa next to:\n" + mapping.CatalogPath;
                 return null;
             }
 
@@ -166,13 +164,16 @@ namespace FanSelector.Core
             FamilySymbol loaded = Find(doc, mapping.FamilyName, candidate.TypeName);
             if (loaded == null)
             {
-                problem = "The family was loaded from:\n" + familyFile + "\n\nbut it has no type called \""
-                        + candidate.TypeName + "\". The catalogue and the family file are out of step.";
+                problem = "The catalogue line \"" + candidate.Designation + "\" needs the family type \""
+                        + candidate.TypeName + "\", and the family has no such type — not in this project "
+                        + "and not in:\n" + familyFile + "\n\n"
+                        + "Options shows which catalogue column names the Revit type; if that is pointing "
+                        + "at the wrong column, every line will ask for a type that does not exist.";
                 return null;
             }
 
-            note = "\"" + candidate.TypeName + "\" was not in the model, so the family was loaded from its "
-                 + "file and its catalogue applied.";
+            note = "The type \"" + candidate.TypeName + "\" was not in the model, so the family was loaded "
+                 + "from its file. Types already in the project were left as they were.";
             return loaded;
         }
 
@@ -195,23 +196,23 @@ namespace FanSelector.Core
         }
 
         /// <summary>
-        /// Catalogue values win on a reload. The catalogue is the source of truth
-        /// for what a type is, and a type whose figures had drifted from it is a
-        /// type that would be selected on numbers it does not actually have.
+        /// Loading must never rewrite a type the project already has. The office
+        /// copy of a family is the authority on its own types — this add-in is
+        /// only here to bring in one that is missing.
         /// </summary>
         private class LoadOptions : IFamilyLoadOptions
         {
             public bool OnFamilyFound(bool familyInUse, out bool overwriteParameterValues)
             {
-                overwriteParameterValues = true;
+                overwriteParameterValues = false;
                 return true;
             }
 
             public bool OnSharedFamilyFound(Family sharedFamily, bool familyInUse,
                                             out FamilySource source, out bool overwriteParameterValues)
             {
-                source = FamilySource.Family;
-                overwriteParameterValues = true;
+                source = FamilySource.Project;
+                overwriteParameterValues = false;
                 return true;
             }
         }

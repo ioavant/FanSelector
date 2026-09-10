@@ -135,7 +135,12 @@ namespace FanSelector.UI
         private void BuildColumns(FamilyMapping mapping)
         {
             ResultsGrid.Columns.Clear();
-            AddColumn("Type", "TypeName", 2.2);
+            AddColumn("Designation", "Designation", 2.2);
+
+            // Only worth a column when it differs from the designation, which is
+            // exactly when a type column has been mapped.
+            if (!string.IsNullOrEmpty(mapping.TypeColumn)) AddColumn("Revit type", "TypeName", 1);
+
             AddColumn(Quantities.AirFlow.ColumnHeader, "AirFlowText", 1);
             AddColumn(Quantities.Pressure.ColumnHeader, "PressureText", 1);
 

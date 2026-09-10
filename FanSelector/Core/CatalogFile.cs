@@ -35,6 +35,10 @@ namespace FanSelector.Core
         {
             get
             {
+                // A nameless column is the line's own first cell, which has no
+                // header of its own; SpecToken carries its description instead.
+                if (Name == null) return "(" + SpecToken + ")";
+
                 string kind = RevitUnits.SpecLabel(Spec);
                 string label = string.IsNullOrEmpty(kind)
                     ? (string.IsNullOrEmpty(UnitToken) ? Name : Name + "  —  " + UnitToken)

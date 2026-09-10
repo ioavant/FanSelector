@@ -158,6 +158,36 @@ namespace FanSelector.Core
         }
 
         /// <summary>
+        /// Which catalogue column names the Revit family type, worked out by
+        /// trying each one against the type names the project actually has and
+        /// keeping whichever matches most lines.
+        ///
+        /// Guessing beats asking here because the answer is checkable: a column
+        /// either names types that exist or it does not. Null means the first
+        /// column already matches, or nothing does.
+        /// </summary>
+        public static string GuessTypeColumn(Document doc, string familyName, CatalogFile file)
+        {
+            if (file == null || !file.IsUsable) return null;
+
+            var loaded = new HashSet<string>(
+                SymbolsOf(doc, familyName).Select(s => s.Name), StringComparer.OrdinalIgnoreCase);
+            if (loaded.Count == 0) return null;
+
+            // The first column is the default, so it only loses to something better.
+            int best = file.Rows.Count(r => loaded.Contains(r.TypeName ?? string.Empty));
+            string bestColumn = null;
+
+            foreach (CatalogColumn column in file.Columns)
+            {
+                int hits = file.Rows.Count(r => loaded.Contains(r.Text(column.Name)));
+                if (hits > best) { best = hits; bestColumn = column.Name; }
+            }
+
+            return bestColumn;
+        }
+
+        /// <summary>
         /// The column most likely to carry this figure: a kind match whose name
         /// looks right, or the only kind match there is. Null when guessing would
         /// be a coin toss.

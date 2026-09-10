@@ -263,6 +263,9 @@ namespace FanSelector.UI
             CatalogFile file = CatalogFile.For(_current.CatalogPath);
             FamilyCatalog catalog = FamilyCatalog.For(_doc, _current.FamilyName);
 
+            if (string.IsNullOrEmpty(_current.TypeColumn))
+                _current.TypeColumn = ParameterScanner.GuessTypeColumn(_doc, _current.FamilyName, file);
+
             foreach (QuantityInfo info in Quantities.All)
             {
                 if (string.IsNullOrEmpty(_current.Column(info.Quantity)))
@@ -306,6 +309,69 @@ namespace FanSelector.UI
                 ? null : CatalogBox.Text.Trim();
             GuessMapping();
             LoadMapping(_current);
+        }
+
+        // ── Which column names the Revit type ─────────────────────────────────
+
+        /// <summary>The first column of every line, offered as "the designation".</summary>
+        private static readonly CatalogColumn FirstColumn =
+            new CatalogColumn { Name = null, SpecToken = "the line's own designation" };
+
+        private void FillTypeColumn()
+        {
+            var choices = new List<CatalogColumn> { FirstColumn };
+            if (_file != null && _file.IsUsable) choices.AddRange(_file.Columns);
+
+            TypeColumnBox.ItemsSource = choices;
+            TypeColumnBox.SelectedItem = choices.FirstOrDefault(
+                c => c.Name != null &&
+                     string.Equals(c.Name, _current.TypeColumn, StringComparison.OrdinalIgnoreCase))
+                ?? FirstColumn;
+            TypeColumnBox.IsEnabled = _file != null && _file.IsUsable;
+
+            ShowTypeColumnStatus();
+        }
+
+        /// <summary>
+        /// How many catalogue lines currently name a type the project has. This is
+        /// the one mapping whose correctness can be measured rather than argued
+        /// about, so it is measured.
+        /// </summary>
+        private void ShowTypeColumnStatus()
+        {
+            if (_current == null || _file == null || !_file.IsUsable)
+            {
+                TypeColumnStatus.Text = string.Empty;
+                return;
+            }
+
+            var loaded = new HashSet<string>(
+                ParameterScanner.SymbolsOf(_doc, _current.FamilyName).Select(s => s.Name),
+                StringComparer.OrdinalIgnoreCase);
+
+            int hits = _file.Rows.Count(
+                r => loaded.Contains(FanSearch.TypeNameFor(_current, r) ?? string.Empty));
+
+            if (loaded.Count == 0)
+            {
+                TypeColumnStatus.Text = "The family has no types in this project, so this cannot be "
+                                      + "checked here — the family file will be loaded when a fan is placed.";
+                return;
+            }
+
+            TypeColumnStatus.Text = hits + " of " + _file.Rows.Count
+                + " catalogue lines name a type this project has."
+                + (hits == 0
+                    ? "  None do — this is almost certainly the wrong column."
+                    : string.Empty);
+        }
+
+        private void OnTypeColumnChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (_loading || _current == null) return;
+            var column = TypeColumnBox.SelectedItem as CatalogColumn;
+            _current.TypeColumn = column == null ? null : column.Name;
+            ShowTypeColumnStatus();
         }
 
         /// <summary>
@@ -372,6 +438,8 @@ namespace FanSelector.UI
                 foreach (ComboBox combo in _paramCombos.Values) combo.ItemsSource = null;
                 ExtraList.ItemsSource = null;
                 ExtraPicker.ItemsSource = null;
+                TypeColumnBox.ItemsSource = null;
+                TypeColumnStatus.Text = string.Empty;
                 PictureHint.Text = string.Empty;
                 return;
             }
@@ -398,9 +466,11 @@ namespace FanSelector.UI
                 finally { System.Windows.Input.Mouse.OverrideCursor = null; }
 
                 CatalogStatus.Text = _file.IsUsable
-                    ? _file.Rows.Count + " types, " + _file.Columns.Count + " columns"
+                    ? _file.Rows.Count + " lines, " + _file.Columns.Count + " columns"
                       + (_file.SkippedLines > 0 ? "   (" + _file.SkippedLines + " lines skipped)" : "")
                     : _file.Problem;
+
+                FillTypeColumn();
 
                 bool showAll = ShowAllBox.IsChecked == true;
                 foreach (QuantityInfo info in Quantities.All)

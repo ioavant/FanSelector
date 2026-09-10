@@ -159,6 +159,16 @@
           </DockPanel>
           <TextBlock x:Name="CatalogStatus" Style="{StaticResource Hint}" />
 
+          <!-- Which column names the Revit type. Not the same as the designation:
+               a family holds one type per size, and many duty points share it. -->
+          <DockPanel Margin="0,8,0,0">
+            <TextBlock DockPanel.Dock="Left" Text="Revit type name from"
+                       VerticalAlignment="Center" Margin="0,0,8,0" />
+            <ComboBox x:Name="TypeColumnBox" DisplayMemberPath="Label"
+                      SelectionChanged="OnTypeColumnChanged" />
+          </DockPanel>
+          <TextBlock x:Name="TypeColumnStatus" Style="{StaticResource Hint}" />
+
           <TextBlock x:Name="PictureHint" Style="{StaticResource Hint}" Margin="0,8,0,0" />
 
           <!-- Mapping -->

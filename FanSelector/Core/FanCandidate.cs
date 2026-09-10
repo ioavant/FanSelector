@@ -6,7 +6,17 @@ namespace FanSelector.Core
     /// <summary>One catalogue row that matched the search, ready to show in the grid.</summary>
     internal class FanCandidate
     {
-        /// <summary>The family type this row names — the catalogue's first cell.</summary>
+        /// <summary>
+        /// What the catalogue calls this duty point — its first cell, e.g.
+        /// "710/9/30/5Z". This is what an engineer recognises, and it is NOT a
+        /// Revit type name.
+        /// </summary>
+        public string Designation { get; set; }
+
+        /// <summary>
+        /// The Revit family type to place, e.g. "710". Several duty points share
+        /// one type, which is why the figures go onto the instance.
+        /// </summary>
         public string TypeName { get; set; }
 
         /// <summary>

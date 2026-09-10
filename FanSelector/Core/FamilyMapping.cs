@@ -32,6 +32,19 @@ namespace FanSelector.Core
         [DataMember(Name = "catalog", Order = 1)]
         public string CatalogPath { get; set; }
 
+        /// <summary>
+        /// The catalogue column holding the name of the Revit family TYPE to
+        /// place. Empty means the first column of the line.
+        ///
+        /// These are not the same thing. A catalogue line is a duty point — a
+        /// designation like "710/9/30/5Z" — while the family holds one type per
+        /// physical size, named "710". Several lines therefore share a type, and
+        /// that is precisely why a fan family declares its air flow and pressure
+        /// per instance: they vary between fans of the same size.
+        /// </summary>
+        [DataMember(Name = "typeColumn", Order = 19)]
+        public string TypeColumn { get; set; }
+
         // ── Catalogue columns the figures are read from ────────────────────────
 
         [DataMember(Name = "airFlowColumn", Order = 2)] public string AirFlowColumn { get; set; }
@@ -206,6 +219,7 @@ namespace FanSelector.Core
                 SfpParam = SfpParam,
                 SoundPowerParam = SoundPowerParam,
                 ExtraColumns = new List<string>(ExtraColumns ?? new List<string>()),
+                TypeColumn = TypeColumn,
                 AddDuctStub = AddDuctStub,
                 CloserFamily = CloserFamily,
                 StubLengthMm = StubLengthMm

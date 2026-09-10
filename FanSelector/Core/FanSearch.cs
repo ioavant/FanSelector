@@ -62,6 +62,23 @@ namespace FanSelector.Core
             return column == null ? null : column.Spec;
         }
 
+        /// <summary>
+        /// The Revit family type a catalogue line asks for. Falls back to the
+        /// line's first cell, which is right for a catalogue whose designation IS
+        /// the type name and wrong only for one that has a separate size column —
+        /// which is what the mapping is for.
+        /// </summary>
+        public static string TypeNameFor(FamilyMapping mapping, CatalogRow row)
+        {
+            if (row == null) return null;
+            if (mapping != null && !string.IsNullOrEmpty(mapping.TypeColumn))
+            {
+                string named = row.Text(mapping.TypeColumn);
+                if (!string.IsNullOrEmpty(named)) return named;
+            }
+            return row.TypeName;
+        }
+
         public static SearchResult Run(Document doc, FamilyMapping mapping,
                                        double targetAirFlow, double targetPressure,
                                        double tolerancePercent, FanSort sort)
@@ -99,7 +116,7 @@ namespace FanSelector.Core
                 if (deviation > tolerance) continue;
 
                 FamilySymbol symbol;
-                loaded.TryGetValue(row.TypeName, out symbol);
+                loaded.TryGetValue(TypeNameFor(mapping, row) ?? string.Empty, out symbol);
                 result.Candidates.Add(Build(row, symbol, mapping, file, units,
                                             airFlow.Value, pressure.Value, deviation));
             }
@@ -130,7 +147,8 @@ namespace FanSelector.Core
         {
             var candidate = new FanCandidate
             {
-                TypeName = row.TypeName,
+                Designation = row.TypeName,
+                TypeName = TypeNameFor(mapping, row),
                 Symbol = symbol,
                 Row = row,
                 AirFlow = airFlow,
