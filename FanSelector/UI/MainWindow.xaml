@@ -3,12 +3,14 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:ClassModifier="internal"
         Title="Fan Selector"
-        Height="620" Width="1000" MinHeight="480" MinWidth="820"
+        Height="640" Width="1020" MinHeight="500" MinWidth="860"
         WindowStartupLocation="CenterOwner"
         ShowInTaskbar="False"
         Background="#FFF6F6F8"
         UseLayoutRounding="True"
-        TextOptions.TextFormattingMode="Display">
+        TextOptions.TextFormattingMode="Display"
+        WindowStyle="None"
+        ResizeMode="CanResizeWithGrip">
 
   <Window.Resources>
     <Style x:Key="Hint" TargetType="TextBlock">
@@ -23,129 +25,229 @@
       <Setter Property="Padding" Value="12,4" />
       <Setter Property="MinWidth" Value="80" />
     </Style>
+
+    <!-- The accent the rest of the Vixeldorf add-ins use for a primary action
+         (ShaftMaster's "Create Shaft"), so the one button that commits work
+         looks the same everywhere. Runs bottom-right to top-left. -->
+    <LinearGradientBrush x:Key="Accent" StartPoint="1,1" EndPoint="0,0">
+      <GradientStop Color="#1F39CA" Offset="0" />
+      <GradientStop Color="#FF11AD" Offset="1" />
+    </LinearGradientBrush>
+
+    <Style x:Key="AccentButton" TargetType="Button">
+      <Setter Property="Foreground" Value="White" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Padding" Value="18,7" />
+      <Setter Property="MinWidth" Value="120" />
+      <Setter Property="Cursor" Value="Hand" />
+      <Setter Property="Background" Value="{StaticResource Accent}" />
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border x:Name="Chrome" CornerRadius="4" SnapsToDevicePixels="True"
+                    Background="{TemplateBinding Background}"
+                    Padding="{TemplateBinding Padding}">
+              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="Chrome" Property="Opacity" Value="0.88" />
+              </Trigger>
+              <Trigger Property="IsPressed" Value="True">
+                <Setter TargetName="Chrome" Property="Opacity" Value="0.72" />
+              </Trigger>
+              <Trigger Property="IsEnabled" Value="False">
+                <Setter TargetName="Chrome" Property="Opacity" Value="0.35" />
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <!-- The window has no system chrome, so it carries its own close button. -->
+    <Style x:Key="CloseGlyph" TargetType="Button">
+      <Setter Property="Width" Value="34" />
+      <Setter Property="Height" Value="26" />
+      <Setter Property="MinWidth" Value="0" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Foreground" Value="#FF55555F" />
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="Cursor" Value="Hand" />
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border x:Name="Chrome" Background="Transparent" CornerRadius="3">
+              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="Chrome" Property="Background" Value="#FFE44B4B" />
+                <Setter Property="Foreground" Value="White" />
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
   </Window.Resources>
 
-  <DockPanel Margin="14">
+  <!-- Without system chrome the window would have no edge against Revit behind it. -->
+  <Border BorderBrush="#FFC8C8D2" BorderThickness="1">
+    <DockPanel Margin="14">
 
-    <!-- Header -->
-    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,10">
-      <Image x:Name="LogoImage" Height="26" Margin="0,0,12,0" Stretch="Uniform" />
-      <TextBlock x:Name="TitleText" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center" />
-    </StackPanel>
-
-    <Border x:Name="BannerBorder" DockPanel.Dock="Top" Visibility="Collapsed"
-            Background="#FFFFF9DB" BorderBrush="#FFE8D98A" BorderThickness="1"
-            Padding="8,5" Margin="0,0,0,10" Cursor="Hand"
-            MouseLeftButtonUp="OnBannerClick">
-      <TextBlock x:Name="BannerText" TextWrapping="Wrap" Foreground="#FF6B5A10" />
-    </Border>
-
-    <!-- Search bar -->
-    <Border DockPanel.Dock="Top" Background="White" BorderBrush="#FFDDDDE3" BorderThickness="1"
-            Padding="10" Margin="0,0,0,10">
-      <Grid>
-        <Grid.RowDefinitions>
-          <RowDefinition Height="Auto" />
-          <RowDefinition Height="Auto" />
-        </Grid.RowDefinitions>
+      <!-- Header. Doubles as the title bar: there is no other way to move a
+           chromeless window. -->
+      <Grid DockPanel.Dock="Top" Margin="0,0,0,10" Background="Transparent"
+            MouseLeftButtonDown="OnHeaderDrag">
         <Grid.ColumnDefinitions>
-          <ColumnDefinition Width="Auto" />
           <ColumnDefinition Width="*" />
-          <ColumnDefinition Width="18" />
-          <ColumnDefinition Width="Auto" />
-          <ColumnDefinition Width="Auto" />
-          <ColumnDefinition Width="Auto" />
-          <ColumnDefinition Width="18" />
-          <ColumnDefinition Width="Auto" />
-          <ColumnDefinition Width="Auto" />
           <ColumnDefinition Width="Auto" />
         </Grid.ColumnDefinitions>
+        <StackPanel Grid.Column="0" Orientation="Horizontal">
+          <Image x:Name="LogoImage" Height="26" Margin="0,0,12,0" Stretch="Uniform" />
+          <TextBlock x:Name="TitleText" FontSize="15" FontWeight="SemiBold"
+                     VerticalAlignment="Center" />
+        </StackPanel>
+        <Button Grid.Column="1" x:Name="CloseGlyphButton" Content="✕"
+                Style="{StaticResource CloseGlyph}" Click="OnClose"
+                ToolTip="Close" />
+      </Grid>
 
-        <TextBlock Grid.Row="0" Grid.Column="0" Text="Fan family"
-                   Style="{StaticResource FieldLabel}" />
-        <ComboBox Grid.Row="0" Grid.Column="1" x:Name="FamilyCombo"
-                  DisplayMemberPath="FamilyName" SelectionChanged="OnFamilyChanged" />
+      <Border x:Name="BannerBorder" DockPanel.Dock="Top" Visibility="Collapsed"
+              Background="#FFFFF9DB" BorderBrush="#FFE8D98A" BorderThickness="1"
+              Padding="8,5" Margin="0,0,0,10" Cursor="Hand"
+              MouseLeftButtonUp="OnBannerClick">
+        <TextBlock x:Name="BannerText" TextWrapping="Wrap" Foreground="#FF6B5A10" />
+      </Border>
 
-        <TextBlock Grid.Row="0" Grid.Column="3" Text="Air flow"
-                   Style="{StaticResource FieldLabel}" />
-        <TextBox Grid.Row="0" Grid.Column="4" x:Name="AirFlowBox" Width="90" />
-        <TextBlock Grid.Row="0" Grid.Column="5" x:Name="AirFlowUnit"
-                   Style="{StaticResource FieldLabel}" Margin="6,0,0,0" MinWidth="44" />
+      <!-- Search bar -->
+      <Border DockPanel.Dock="Top" Background="White" BorderBrush="#FFDDDDE3" BorderThickness="1"
+              Padding="10" Margin="0,0,0,10">
+        <Grid>
+          <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+          </Grid.RowDefinitions>
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="18" />
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="18" />
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="Auto" />
+          </Grid.ColumnDefinitions>
 
-        <TextBlock Grid.Row="0" Grid.Column="7" Text="Tolerance"
-                   Style="{StaticResource FieldLabel}" />
-        <TextBox Grid.Row="0" Grid.Column="8" x:Name="ToleranceBox" Width="46" />
-        <TextBlock Grid.Row="0" Grid.Column="9" Text="%" Style="{StaticResource FieldLabel}"
-                   Margin="6,0,0,0" />
+          <TextBlock Grid.Row="0" Grid.Column="0" Text="Fan family"
+                     Style="{StaticResource FieldLabel}" />
+          <ComboBox Grid.Row="0" Grid.Column="1" x:Name="FamilyCombo"
+                    DisplayMemberPath="FamilyName" SelectionChanged="OnFamilyChanged" />
 
-        <TextBlock Grid.Row="1" Grid.Column="0" Text="Sort by"
-                   Style="{StaticResource FieldLabel}" Margin="0,8,6,0" />
-        <ComboBox Grid.Row="1" Grid.Column="1" x:Name="SortCombo" Margin="0,8,0,0"
-                  SelectionChanged="OnSortChanged">
-          <ComboBoxItem Content="Closest to the requested duty" IsSelected="True" />
-          <ComboBoxItem Content="Lowest SFP / best efficiency" />
-          <ComboBoxItem Content="Quietest" />
-          <ComboBoxItem Content="Lowest motor power" />
-        </ComboBox>
+          <TextBlock Grid.Row="0" Grid.Column="3" Text="Air flow"
+                     Style="{StaticResource FieldLabel}" />
+          <TextBox Grid.Row="0" Grid.Column="4" x:Name="AirFlowBox" Width="90" />
+          <TextBlock Grid.Row="0" Grid.Column="5" x:Name="AirFlowUnit"
+                     Style="{StaticResource FieldLabel}" Margin="6,0,0,0" MinWidth="44" />
 
-        <TextBlock Grid.Row="1" Grid.Column="3" Text="Pressure"
-                   Style="{StaticResource FieldLabel}" Margin="0,8,6,0" />
-        <TextBox Grid.Row="1" Grid.Column="4" x:Name="PressureBox" Width="90" Margin="0,8,0,0" />
-        <TextBlock Grid.Row="1" Grid.Column="5" x:Name="PressureUnit"
-                   Style="{StaticResource FieldLabel}" Margin="6,8,0,0" MinWidth="44" />
+          <TextBlock Grid.Row="0" Grid.Column="7" Text="Tolerance"
+                     Style="{StaticResource FieldLabel}" />
+          <TextBox Grid.Row="0" Grid.Column="8" x:Name="ToleranceBox" Width="46" />
+          <TextBlock Grid.Row="0" Grid.Column="9" Text="%" Style="{StaticResource FieldLabel}"
+                     Margin="6,0,0,0" />
 
-        <StackPanel Grid.Row="1" Grid.Column="7" Grid.ColumnSpan="3" Orientation="Horizontal"
-                    Margin="0,8,0,0" HorizontalAlignment="Right">
-          <Button x:Name="SearchButton" Content="Search" IsDefault="True"
-                  Click="OnSearch" Margin="0,0,8,0" />
-          <Button x:Name="OptionsButton" Content="Options…" Click="OnOptions" />
+          <TextBlock Grid.Row="1" Grid.Column="0" Text="Sort by"
+                     Style="{StaticResource FieldLabel}" Margin="0,8,6,0" />
+          <ComboBox Grid.Row="1" Grid.Column="1" x:Name="SortCombo" Margin="0,8,0,0"
+                    SelectionChanged="OnSortChanged">
+            <ComboBoxItem Content="Closest to the requested duty" IsSelected="True" />
+            <ComboBoxItem Content="Lowest SFP / best efficiency" />
+            <ComboBoxItem Content="Quietest" />
+            <ComboBoxItem Content="Lowest motor power" />
+          </ComboBox>
+
+          <TextBlock Grid.Row="1" Grid.Column="3" Text="Pressure"
+                     Style="{StaticResource FieldLabel}" Margin="0,8,6,0" />
+          <TextBox Grid.Row="1" Grid.Column="4" x:Name="PressureBox" Width="90" Margin="0,8,0,0" />
+          <TextBlock Grid.Row="1" Grid.Column="5" x:Name="PressureUnit"
+                     Style="{StaticResource FieldLabel}" Margin="6,8,0,0" MinWidth="44" />
+
+          <Button Grid.Row="1" Grid.Column="7" Grid.ColumnSpan="3" x:Name="SearchButton"
+                  Content="Search" IsDefault="True" Click="OnSearch"
+                  Margin="0,8,0,0" HorizontalAlignment="Stretch" MinWidth="90" />
+        </Grid>
+      </Border>
+
+      <!-- Footer -->
+      <Grid DockPanel.Dock="Bottom" Margin="0,10,0,0">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="*" />
+          <ColumnDefinition Width="Auto" />
+        </Grid.ColumnDefinitions>
+        <TextBlock Grid.Column="0" x:Name="StatusText" Style="{StaticResource Hint}"
+                   VerticalAlignment="Center" Margin="0,0,12,0" />
+        <StackPanel Grid.Column="1" Orientation="Horizontal">
+          <Button x:Name="OptionsButton" Content="Options…" Click="OnOptions" Margin="0,0,8,0" />
+          <!-- IsCancel closes the dialog on its own, and on Esc as well. -->
+          <Button x:Name="CloseButton" Content="Close" IsCancel="True" />
         </StackPanel>
       </Grid>
-    </Border>
 
-    <!-- Footer -->
-    <Grid DockPanel.Dock="Bottom" Margin="0,10,0,0">
-      <Grid.ColumnDefinitions>
-        <ColumnDefinition Width="*" />
-        <ColumnDefinition Width="Auto" />
-      </Grid.ColumnDefinitions>
-      <TextBlock Grid.Column="0" x:Name="StatusText" Style="{StaticResource Hint}"
-                 VerticalAlignment="Center" />
-      <StackPanel Grid.Column="1" Orientation="Horizontal">
-        <!-- Seeded from the family's own setting, but switchable here: whether
-             this particular fan gets a stub is decided when it is placed. -->
-        <CheckBox x:Name="StubBox" VerticalAlignment="Center" Margin="0,0,16,0"
-                  Content="With duct stub and closer"
-                  ToolTip="Also grow a short duct off one connector and cap it with an air terminal carrying the air flow above." />
-        <Button x:Name="InsertButton" Content="Insert fan" Click="OnInsert"
-                IsEnabled="False" Margin="0,0,8,0" />
-        <Button x:Name="CloseButton" Content="Close" IsCancel="True" />
-      </StackPanel>
-    </Grid>
+      <!-- Results, with the commit action directly above them so choosing a row
+           and placing it are the same corner of the screen. -->
+      <DockPanel>
+        <Grid DockPanel.Dock="Top" Margin="0,0,0,8">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="20" />
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="14" />
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="*" />
+          </Grid.ColumnDefinitions>
 
-    <!-- Results -->
-    <Grid>
-      <Grid.ColumnDefinitions>
-        <ColumnDefinition Width="*" />
-        <ColumnDefinition Width="12" />
-        <ColumnDefinition Width="220" />
-      </Grid.ColumnDefinitions>
+          <Button Grid.Column="0" x:Name="InsertButton" Content="Insert fan"
+                  Style="{StaticResource AccentButton}" Click="OnInsert" IsEnabled="False" />
 
-      <DataGrid Grid.Column="0" x:Name="ResultsGrid"
-                AutoGenerateColumns="False" IsReadOnly="True"
-                SelectionMode="Single" SelectionUnit="FullRow"
-                HeadersVisibility="Column" GridLinesVisibility="Horizontal"
-                HorizontalGridLinesBrush="#FFE8E8ED"
-                BorderBrush="#FFDDDDE3" Background="White"
-                AlternatingRowBackground="#FFFAFAFC"
-                CanUserResizeRows="False"
-                SelectionChanged="OnResultSelected"
-                MouseDoubleClick="OnResultDoubleClick" />
+          <CheckBox Grid.Column="2" x:Name="StubBox" VerticalAlignment="Center"
+                    Content="With duct stub and closer"
+                    ToolTip="Also grow a short duct off one connector and cap it with an air terminal carrying the air flow above." />
 
-      <Border Grid.Column="2" Background="White" BorderBrush="#FFDDDDE3" BorderThickness="1">
-        <Image x:Name="PreviewImage" Margin="8" Stretch="Uniform" />
-      </Border>
-    </Grid>
+          <TextBlock Grid.Column="4" Text="Duct system" Style="{StaticResource FieldLabel}"
+                     Margin="0,0,6,0" />
+          <ComboBox Grid.Column="5" x:Name="SystemTypeBox" Width="170" VerticalAlignment="Center"
+                    SelectionChanged="OnSystemTypeChanged"
+                    ToolTip="System the generated stub joins. Left automatic, it follows the fan connector's own system." />
+        </Grid>
 
-  </DockPanel>
+        <Grid>
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="12" />
+            <ColumnDefinition Width="220" />
+          </Grid.ColumnDefinitions>
+
+          <DataGrid Grid.Column="0" x:Name="ResultsGrid"
+                    AutoGenerateColumns="False" IsReadOnly="True"
+                    SelectionMode="Single" SelectionUnit="FullRow"
+                    HeadersVisibility="Column" GridLinesVisibility="Horizontal"
+                    HorizontalGridLinesBrush="#FFE8E8ED"
+                    BorderBrush="#FFDDDDE3" Background="White"
+                    AlternatingRowBackground="#FFFAFAFC"
+                    CanUserResizeRows="False"
+                    SelectionChanged="OnResultSelected"
+                    MouseDoubleClick="OnResultDoubleClick" />
+
+          <Border Grid.Column="2" Background="White" BorderBrush="#FFDDDDE3" BorderThickness="1">
+            <Image x:Name="PreviewImage" Margin="8" Stretch="Uniform" />
+          </Border>
+        </Grid>
+      </DockPanel>
+
+    </DockPanel>
+  </Border>
 </Window>
