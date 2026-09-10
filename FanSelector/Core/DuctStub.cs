@@ -119,6 +119,10 @@ namespace FanSelector.Core
             if (!FreeConnectorId(duct, out endId))
                 return "the stub's open end could not be found again, so the closer is not joined to it.";
 
+            // Size first: changing it moves the family's own geometry, so there is
+            // no point aligning a connector that is about to shift.
+            string sizeNote = MatchSize(doc, terminal, ownId, duct, endId);
+
             try
             {
                 XYZ wanted = ConnectorById(duct, endId).CoordinateSystem.BasisZ.Negate();
@@ -148,12 +152,99 @@ namespace FanSelector.Core
                 Connector own = ConnectorById(terminal, ownId);
                 Connector end = ConnectorById(duct, endId);
                 if (!own.IsConnected && !end.IsConnected) own.ConnectTo(end);
-                return null;
+                return sizeNote;
             }
             catch (Exception exception)
             {
-                return "the closer could not be aligned to the stub (" + exception.Message + ").";
+                return Join(sizeNote,
+                    "the closer could not be aligned to the stub (" + exception.Message + ").");
             }
+        }
+
+        /// <summary>
+        /// Give the closer the duct's diameter. The duct already has the fan
+        /// connector's size, so this carries the fan's own outlet size all the way
+        /// through to the terminal — which is the point of a closer.
+        ///
+        /// Which family parameter drives the connector is not guessed from its
+        /// name. The connector has a diameter right now, and the parameter that
+        /// currently EQUALS it is the one driving it; that is a fact about this
+        /// family rather than a hope about its naming. A name hint only breaks
+        /// ties, and the result is verified by re-reading the connector.
+        /// </summary>
+        private static string MatchSize(Document doc, FamilyInstance terminal, int ownId,
+                                        Duct duct, int endId)
+        {
+            double target = DiameterOf(ConnectorById(duct, endId));
+            double current = DiameterOf(ConnectorById(terminal, ownId));
+            if (target <= 0.0 || current <= 0.0) return null;
+            if (Math.Abs(target - current) < 1e-9) return null;   // already right
+
+            var lengths = new List<Parameter>();
+            try
+            {
+                foreach (Parameter parameter in terminal.Parameters)
+                {
+                    if (parameter == null || parameter.Definition == null) continue;
+                    if (parameter.IsReadOnly || parameter.StorageType != StorageType.Double) continue;
+
+                    ForgeTypeId spec = RevitUnits.SpecOf(parameter);
+                    if (spec == null || spec.TypeId != SpecTypeId.Length.TypeId) continue;
+                    lengths.Add(parameter);
+                }
+            }
+            catch { return null; }
+
+            List<Parameter> driving = lengths
+                .Where(p => Math.Abs(p.AsDouble() - current) < 1e-7)
+                .ToList();
+
+            Parameter driver = Hinted(driving) ?? driving.FirstOrDefault() ?? Hinted(lengths);
+            if (driver == null)
+                return "the closer's connection size could not be matched to the duct — no parameter of it "
+                     + "holds the connector's diameter.";
+
+            try { driver.Set(target); }
+            catch (Exception exception)
+            {
+                return "the closer's connection size could not be set (" + exception.Message + ").";
+            }
+
+            doc.Regenerate();
+
+            double now = DiameterOf(ConnectorById(terminal, ownId));
+            if (Math.Abs(now - target) > 1e-6)
+                return "\"" + driver.Definition.Name + "\" was set on the closer, but its connector is "
+                     + "still a different size from the duct, so something else drives it.";
+
+            return null;
+        }
+
+        private static Parameter Hinted(List<Parameter> parameters)
+        {
+            string[] hints = { "diameter", "size", "neck", "duct", "connection" };
+            foreach (string hint in hints)
+                foreach (Parameter parameter in parameters)
+                    if (parameter.Definition.Name.IndexOf(hint, StringComparison.CurrentCultureIgnoreCase) >= 0)
+                        return parameter;
+            return null;
+        }
+
+        private static double DiameterOf(Connector connector)
+        {
+            if (connector == null) return 0.0;
+            try
+            {
+                return connector.Shape == ConnectorProfileType.Round ? connector.Radius * 2.0 : 0.0;
+            }
+            catch { return 0.0; }
+        }
+
+        private static string Join(string first, string second)
+        {
+            if (string.IsNullOrEmpty(first)) return second;
+            if (string.IsNullOrEmpty(second)) return first;
+            return first + " " + second;
         }
 
         private static Connector ConnectorById(Element owner, int id)
