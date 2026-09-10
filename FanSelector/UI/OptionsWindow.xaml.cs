@@ -474,6 +474,8 @@ namespace FanSelector.UI
                 if (string.IsNullOrEmpty(mapping.TypeColumn))
                     mapping.TypeColumn = ParameterScanner.GuessTypeColumn(_doc, mapping.FamilyName, _file);
 
+                RepairWriteTargets(mapping);
+
                 // Reading the family definition is the slow part, and it is only
                 // needed for the "write onto the fan" half.
                 System.Windows.Input.Mouse.OverrideCursor = System.Windows.Input.Cursors.Wait;
@@ -523,6 +525,30 @@ namespace FanSelector.UI
                 c => c != null && string.Equals(c.Name, stored, StringComparison.OrdinalIgnoreCase));
             if (combo.SelectedItem == null) combo.SelectedIndex = 0;
             combo.IsEnabled = _file != null && _file.IsUsable;
+        }
+
+        /// <summary>
+        /// Replace a stored write target that cannot be written — a read-only or
+        /// vanished parameter — with one that can. Keeping it would only mean the
+        /// figure is silently dropped at every placement, and the guess is the
+        /// same one the family would have been given had it been set up today.
+        /// </summary>
+        private void RepairWriteTargets(FamilyMapping mapping)
+        {
+            foreach (QuantityInfo info in Quantities.All)
+            {
+                string stored = mapping.Param(info.Quantity);
+                if (string.IsNullOrEmpty(stored)) continue;
+
+                List<ParamChoice> writable = ParameterScanner.Params(
+                    _doc, mapping.FamilyName, _catalog, info, true, _units);
+                if (writable.Any(c => string.Equals(c.Name, stored, StringComparison.OrdinalIgnoreCase)))
+                    continue;
+
+                string better = ParameterScanner.GuessParam(
+                    _doc, mapping.FamilyName, _catalog, info, _units);
+                if (!string.IsNullOrEmpty(better)) mapping.SetParam(info.Quantity, better);
+            }
         }
 
         private void FillParamCombo(ComboBox combo, QuantityInfo info, bool showAll)

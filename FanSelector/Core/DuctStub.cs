@@ -35,19 +35,24 @@ namespace FanSelector.Core
                 return "The fan was placed, but no free round duct connector was found on it, so no stub "
                      + "was grown.";
 
-            ElementId systemTypeId = ResolveSystemType(doc, settings, outlet);
-            if (systemTypeId == ElementId.InvalidElementId)
-                return "The fan was placed, but the project has no duct system type, so no stub was grown.";
-
             ElementId ductTypeId = ResolveDuctType(doc, settings, outlet);
             if (ductTypeId == ElementId.InvalidElementId)
-                return "The fan was placed, but the project has no round duct type to grow a stub with.";
+                return "The fan was placed, but the project has no duct type of the right shape to grow a "
+                     + "stub with.";
+
+            ElementId levelId = ResolveLevel(doc, fan);
+            if (levelId == ElementId.InvalidElementId)
+                return "The fan was placed, but no level could be found to host a duct stub on.";
 
             string trouble;
-            Duct duct = CreateDuct(doc, systemTypeId, ductTypeId, outlet, mapping.StubLengthFt, out trouble);
+            Duct duct = CreateDuct(doc, ductTypeId, levelId, outlet, mapping.StubLengthFt, out trouble);
             if (duct == null) return "The fan was placed, but the duct stub could not be created: " + trouble;
 
             doc.Regenerate();
+
+            // The system follows the connector the stub grew from. Only override
+            // that if the user actually asked for a particular system type.
+            ApplySystemType(doc, duct, settings);
 
             Connector open = OpenEnd(duct);
             if (open == null)
@@ -145,44 +150,53 @@ namespace FanSelector.Core
         }
 
         /// <summary>
-        /// The system type for the stub: the user's choice if they made one,
-        /// otherwise the one matching the fan connector's own system type — a
-        /// supply connector gets a supply system — and failing that whatever the
-        /// project has. Both enums spell these the same ("SupplyAir"), so they are
-        /// matched by name.
+        /// The level to hang the stub on: the fan's own, so the two live together
+        /// in schedules and view ranges. Any level will do as a fallback — the
+        /// duct's geometry comes from the connector either way.
         /// </summary>
-        private static ElementId ResolveSystemType(Document doc, FanSettings settings, Connector outlet)
+        private static ElementId ResolveLevel(Document doc, FamilyInstance fan)
         {
-            List<MechanicalSystemType> types;
             try
             {
-                types = new FilteredElementCollector(doc)
-                    .OfClass(typeof(MechanicalSystemType))
-                    .Cast<MechanicalSystemType>()
-                    .ToList();
+                if (fan.LevelId != null && fan.LevelId != ElementId.InvalidElementId) return fan.LevelId;
+            }
+            catch { /* fall through */ }
+
+            try
+            {
+                Level any = new FilteredElementCollector(doc)
+                    .OfClass(typeof(Level))
+                    .Cast<Level>()
+                    .OrderBy(l => l.Elevation)
+                    .FirstOrDefault();
+                return any == null ? ElementId.InvalidElementId : any.Id;
             }
             catch { return ElementId.InvalidElementId; }
+        }
 
-            if (types.Count == 0) return ElementId.InvalidElementId;
-
-            if (!string.IsNullOrEmpty(settings.DuctSystemType))
-            {
-                MechanicalSystemType chosen = types.FirstOrDefault(
-                    t => string.Equals(t.Name, settings.DuctSystemType, StringComparison.OrdinalIgnoreCase));
-                if (chosen != null) return chosen.Id;
-            }
+        /// <summary>
+        /// Put the stub on the system type the user picked, if they picked one.
+        /// Growing from a connector already lands it in that connector's system,
+        /// which is the right answer nearly always — so this is an override, not
+        /// a requirement, and a refusal is not worth troubling anyone with.
+        /// </summary>
+        private static void ApplySystemType(Document doc, Duct duct, FanSettings settings)
+        {
+            if (string.IsNullOrEmpty(settings.DuctSystemType)) return;
 
             try
             {
-                string wanted = outlet.DuctSystemType.ToString();
-                MechanicalSystemType matching = types.FirstOrDefault(
-                    t => string.Equals(t.SystemClassification.ToString(), wanted,
-                                       StringComparison.OrdinalIgnoreCase));
-                if (matching != null) return matching.Id;
-            }
-            catch { /* connector has no duct system type - fall through */ }
+                MechanicalSystemType chosen = new FilteredElementCollector(doc)
+                    .OfClass(typeof(MechanicalSystemType))
+                    .Cast<MechanicalSystemType>()
+                    .FirstOrDefault(t => string.Equals(t.Name, settings.DuctSystemType,
+                                                       StringComparison.OrdinalIgnoreCase));
+                if (chosen == null) return;
 
-            return types[0].Id;
+                Parameter parameter = duct.get_Parameter(BuiltInParameter.RBS_DUCT_SYSTEM_TYPE_PARAM);
+                if (parameter != null && !parameter.IsReadOnly) parameter.Set(chosen.Id);
+            }
+            catch { /* the connector's own system stands */ }
         }
 
         /// <summary>
@@ -231,13 +245,20 @@ namespace FanSelector.Core
 
         /// <summary>
         /// Duct.Create from a connector inherits the connector's size and connects
-        /// itself to it, so the stub is the right diameter without being told.
+        /// itself to it, so the stub is the right diameter without being told, and
+        /// it joins the system the connector already belongs to.
+        ///
+        /// The argument order matters and is not the one the six-argument overload
+        /// uses: from a connector it is (ductTypeId, levelId), with no system type
+        /// at all. Passing a system type first is what produced "the duct type
+        /// ductTypeId is not valid duct type" — the call was handed a
+        /// MechanicalSystemType where a DuctType belongs.
         ///
         /// Which way the connector's Z axis points is the one thing not worth
         /// trusting blind, so if the first direction is refused the opposite one is
         /// tried before giving up.
         /// </summary>
-        private static Duct CreateDuct(Document doc, ElementId systemTypeId, ElementId ductTypeId,
+        private static Duct CreateDuct(Document doc, ElementId ductTypeId, ElementId levelId,
                                        Connector start, double lengthFt, out string trouble)
         {
             trouble = null;
@@ -252,7 +273,7 @@ namespace FanSelector.Core
                 try
                 {
                     XYZ end = start.Origin + direction.Normalize().Multiply(lengthFt);
-                    Duct duct = Duct.Create(doc, systemTypeId, ductTypeId, start, end);
+                    Duct duct = Duct.Create(doc, ductTypeId, levelId, start, end);
                     if (duct != null) return duct;
                 }
                 catch (Exception exception) { trouble = exception.Message; }

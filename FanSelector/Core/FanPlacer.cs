@@ -300,17 +300,29 @@ namespace FanSelector.Core
                 try { parameter = instance.LookupParameter(parameterName); }
                 catch { parameter = null; }
 
-                if (parameter == null)
+                // A mapped target that cannot be written is not a reason to drop
+                // the value on the floor. A fan family usually has a writable
+                // twin of the same kind — "Override AirFlow" beside a calculated
+                // "TES_AirFlow" — so use it and say so, rather than refusing and
+                // leaving the user to work out which name was meant.
+                if (parameter == null || parameter.IsReadOnly)
                 {
-                    problems.Add("\"" + parameterName + "\" (" + info.DisplayName
-                                 + ") is not an instance parameter of this family");
-                    continue;
-                }
+                    Parameter substitute = Writable(instance, info);
+                    if (substitute == null)
+                    {
+                        problems.Add("\"" + parameterName + "\" (" + info.DisplayName + ") "
+                                     + (parameter == null
+                                            ? "is not a parameter of this fan"
+                                            : "is read-only")
+                                     + ", and the fan has no writable one of that kind");
+                        continue;
+                    }
 
-                if (parameter.IsReadOnly)
-                {
-                    problems.Add("\"" + parameterName + "\" (" + info.DisplayName + ") is read-only");
-                    continue;
+                    problems.Add("\"" + parameterName + "\" (" + info.DisplayName + ") "
+                                 + (parameter == null ? "does not exist" : "is read-only")
+                                 + " — \"" + substitute.Definition.Name + "\" was written instead. "
+                                 + "Set it as the target in Options to make that permanent.");
+                    parameter = substitute;
                 }
 
                 try
@@ -330,9 +342,36 @@ namespace FanSelector.Core
 
             if (problems.Count == 0) return null;
 
-            return "The fan was placed, but some figures could not be written onto it:\n\n  • "
+            return "The fan was placed. About the figures written onto it:\n\n  • "
                  + string.Join("\n  • ", problems.ToArray())
-                 + "\n\nCheck the \"write to\" column in Options for this family.";
+                 + "\n\nThe \"write to\" column in Options for this family is where these are set.";
+        }
+
+        /// <summary>
+        /// A parameter of this fan that can actually take this figure: writable,
+        /// of a fitting kind, and named like the thing it holds.
+        /// </summary>
+        private static Parameter Writable(FamilyInstance instance, QuantityInfo info)
+        {
+            var candidates = new List<Parameter>();
+            try
+            {
+                foreach (Parameter parameter in instance.Parameters)
+                {
+                    if (parameter == null || parameter.Definition == null) continue;
+                    if (parameter.IsReadOnly) continue;
+                    if (!Quantities.AcceptsSpec(info, RevitUnits.SpecOf(parameter))) continue;
+                    candidates.Add(parameter);
+                }
+            }
+            catch { return null; }
+
+            foreach (string hint in info.NameHints)
+                foreach (Parameter parameter in candidates)
+                    if (parameter.Definition.Name.IndexOf(hint, StringComparison.CurrentCultureIgnoreCase) >= 0)
+                        return parameter;
+
+            return candidates.Count == 1 ? candidates[0] : null;
         }
 
         /// <summary>
