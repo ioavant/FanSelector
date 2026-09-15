@@ -44,6 +44,11 @@ namespace FanSelector.Core
             if (levelId == ElementId.InvalidElementId)
                 return "The fan was placed, but no level could be found to host a duct stub on.";
 
+            // Noted before anything is created: once the stub is on, this is how
+            // the fan's own joint is found again to check it survived.
+            int outletId = outlet.Id;
+            XYZ outletOrigin = outlet.Origin;
+
             string trouble;
             Duct duct = CreateDuct(doc, ductTypeId, levelId, outlet, mapping.StubLengthFt, out trouble);
             if (duct == null) return "The fan was placed, but the duct stub could not be created: " + trouble;
@@ -92,11 +97,16 @@ namespace FanSelector.Core
             doc.Regenerate();
 
             var notes = new List<string>();
-            string fitNote = FitToEnd(doc, terminal, duct);
+            string fitNote = FitToEnd(doc, terminal, duct, outletOrigin);
             if (fitNote != null) notes.Add(fitNote);
 
             string flowNote = SetFlow(terminal, requestedAirFlow);
             if (flowNote != null) notes.Add(flowNote);
+
+            // The whole point is a stub ON the fan. Checked rather than assumed,
+            // because moving anything in a connected network moves the rest of it.
+            if (!StillJoined(fan, outletId))
+                notes.Add("the stub came away from the fan's connector while the closer was fitted.");
 
             return notes.Count == 0 ? null
                  : "The fan, its stub and the closer were placed, but: " + string.Join(" ", notes.ToArray());
@@ -111,16 +121,27 @@ namespace FanSelector.Core
         /// OPPOSITE — each points into the other — which is why the wanted
         /// direction is the duct connector's axis negated.
         /// </summary>
-        private static string FitToEnd(Document doc, FamilyInstance terminal, Duct duct)
+        private static string FitToEnd(Document doc, FamilyInstance terminal, Duct duct, XYZ fanOrigin)
         {
+            // Nothing may be moved while it is joined to something else: Revit
+            // drags a connected network along, so rotating a terminal that had
+            // already snapped onto the stub would swing the stub — and with it the
+            // fan at the far end — out of place. Detach, fit, then join.
+            Detach(doc, terminal);
+
             int ownId, endId;
             if (!FreeConnectorId(terminal, out ownId))
                 return "the closer has no free duct connector, so it is not joined to the stub.";
-            if (!FreeConnectorId(duct, out endId))
-                return "the stub's open end could not be found again, so the closer is not joined to it.";
 
-            // Size first: changing it moves the family's own geometry, so there is
-            // no point aligning a connector that is about to shift.
+            // The end to cap is the one AWAY from the fan. Picking "the first
+            // unconnected one" is a coin toss whenever the stub is not yet joined
+            // to the fan, and getting it wrong caps the wrong end.
+            endId = FarEndId(duct, fanOrigin);
+            if (endId < 0)
+                return "the stub's open end could not be found, so the closer is not joined to it.";
+
+            // Size before alignment: changing it moves the family's own geometry,
+            // so there is no point aligning a connector that is about to shift.
             string sizeNote = MatchSize(doc, terminal, ownId, duct, endId);
 
             try
@@ -245,6 +266,65 @@ namespace FanSelector.Core
             if (string.IsNullOrEmpty(first)) return second;
             if (string.IsNullOrEmpty(second)) return first;
             return first + " " + second;
+        }
+
+        /// <summary>
+        /// Break every joint an element has, so it can be moved on its own.
+        /// </summary>
+        private static void Detach(Document doc, Element element)
+        {
+            try
+            {
+                foreach (Connector own in Connectors(element))
+                {
+                    if (!own.IsConnected) continue;
+
+                    // Collected first: disconnecting while enumerating AllRefs
+                    // mutates what is being walked.
+                    var joined = new List<Connector>();
+                    foreach (Connector other in own.AllRefs)
+                        if (other.Owner != null && other.Owner.Id != element.Id) joined.Add(other);
+
+                    foreach (Connector other in joined)
+                    {
+                        try { own.DisconnectFrom(other); } catch { /* already apart */ }
+                    }
+                }
+                doc.Regenerate();
+            }
+            catch { /* nothing joined, or nothing that can be parted */ }
+        }
+
+        /// <summary>
+        /// The stub's connector farthest from the fan — the end to cap. Distance
+        /// decides it rather than connection state, which is only trustworthy once
+        /// the fan joint has actually been made.
+        /// </summary>
+        private static int FarEndId(Duct duct, XYZ fanOrigin)
+        {
+            int best = -1;
+            double farthest = -1.0;
+            foreach (Connector connector in Connectors(duct))
+            {
+                try
+                {
+                    double distance = connector.Origin.DistanceTo(fanOrigin);
+                    if (distance > farthest) { farthest = distance; best = connector.Id; }
+                }
+                catch { /* skip a connector that will not report a position */ }
+            }
+            return best;
+        }
+
+        /// <summary>Whether the fan's own connector still has the stub on it.</summary>
+        private static bool StillJoined(FamilyInstance fan, int outletId)
+        {
+            try
+            {
+                Connector outlet = ConnectorById(fan, outletId);
+                return outlet != null && outlet.IsConnected;
+            }
+            catch { return false; }
         }
 
         private static Connector ConnectorById(Element owner, int id)
