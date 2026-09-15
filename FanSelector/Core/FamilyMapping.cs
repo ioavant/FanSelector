@@ -91,6 +91,20 @@ namespace FanSelector.Core
         [DataMember(Name = "closerFamily", Order = 17)]
         public string CloserFamily { get; set; }
 
+        /// <summary>
+        /// The closer's own instance parameter that sets its connection diameter,
+        /// named by the user rather than worked out.
+        ///
+        /// Revit sizes an air terminal to the duct when one is placed on it by
+        /// hand, but the API's hosted placement does not, and which parameter
+        /// carries the diameter cannot be told from outside the family: a name
+        /// proves nothing and a matching value is not always there. The person who
+        /// owns the family knows it in a second. Empty falls back to looking for a
+        /// parameter that already holds the connector's diameter.
+        /// </summary>
+        [DataMember(Name = "closerSizeParam", Order = 20)]
+        public string CloserSizeParam { get; set; }
+
         /// <summary>Length of the stub in millimetres.</summary>
         [DataMember(Name = "stubLengthMm", Order = 18)]
         public double StubLengthMm { get; set; }
@@ -222,6 +236,7 @@ namespace FanSelector.Core
                 TypeColumn = TypeColumn,
                 AddDuctStub = AddDuctStub,
                 CloserFamily = CloserFamily,
+                CloserSizeParam = CloserSizeParam,
                 StubLengthMm = StubLengthMm
             };
         }

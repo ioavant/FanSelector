@@ -223,6 +223,7 @@
             <Grid.RowDefinitions>
               <RowDefinition Height="Auto" />
               <RowDefinition Height="Auto" />
+              <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
             <TextBlock Grid.Row="0" Grid.Column="0" Text="Closer family"
@@ -230,9 +231,15 @@
             <ComboBox Grid.Row="0" Grid.Column="1" x:Name="CloserBox" IsEditable="True"
                       Margin="0,0,0,6" />
 
-            <TextBlock Grid.Row="1" Grid.Column="0" Text="Stub length"
+            <TextBlock Grid.Row="1" Grid.Column="0" Text="Connection size"
+                       VerticalAlignment="Center" Margin="0,0,8,6" />
+            <ComboBox Grid.Row="1" Grid.Column="1" x:Name="CloserSizeBox" IsEditable="True"
+                      Margin="0,0,0,6"
+                      ToolTip="The closer's own instance parameter that sets its connection diameter. It is given the duct's size, which the duct took from the fan." />
+
+            <TextBlock Grid.Row="2" Grid.Column="0" Text="Stub length"
                        VerticalAlignment="Center" Margin="0,0,8,0" />
-            <DockPanel Grid.Row="1" Grid.Column="1">
+            <DockPanel Grid.Row="2" Grid.Column="1">
               <TextBlock DockPanel.Dock="Right" x:Name="StubUnitText" VerticalAlignment="Center"
                          Margin="6,0,0,0" MinWidth="40" />
               <TextBox x:Name="StubLengthBox" Width="110" HorizontalAlignment="Left" />

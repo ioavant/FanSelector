@@ -114,7 +114,7 @@ namespace FanSelector.Core
                 notes.Add("the stub came out " + Size(doc, stubDiameter) + " where the fan's connector is "
                           + Size(doc, outletDiameter) + ", so it did not take the connector's size.");
 
-            string fitNote = FitToEnd(doc, terminal, duct, outletOrigin);
+            string fitNote = FitToEnd(doc, terminal, duct, outletOrigin, mapping);
             if (fitNote != null) notes.Add(fitNote);
 
             string flowNote = SetFlow(terminal, requestedAirFlow);
@@ -138,7 +138,8 @@ namespace FanSelector.Core
         /// OPPOSITE — each points into the other — which is why the wanted
         /// direction is the duct connector's axis negated.
         /// </summary>
-        private static string FitToEnd(Document doc, FamilyInstance terminal, Duct duct, XYZ fanOrigin)
+        private static string FitToEnd(Document doc, FamilyInstance terminal, Duct duct, XYZ fanOrigin,
+                                       FamilyMapping mapping)
         {
             // Hosting has by now given the terminal the duct's size, which is the
             // only reason it was hosted. From here it has to come off: nothing may
@@ -162,7 +163,7 @@ namespace FanSelector.Core
 
             // Size before alignment: changing it moves the family's own geometry,
             // so there is no point aligning a connector that is about to shift.
-            string sizeNote = MatchSize(doc, terminal, ownId, duct, endId);
+            string sizeNote = MatchSize(doc, terminal, ownId, duct, endId, mapping);
 
             try
             {
@@ -214,12 +215,18 @@ namespace FanSelector.Core
         /// ties, and the result is verified by re-reading the connector.
         /// </summary>
         private static string MatchSize(Document doc, FamilyInstance terminal, int ownId,
-                                        Duct duct, int endId)
+                                        Duct duct, int endId, FamilyMapping mapping)
         {
             double target = DiameterOf(ConnectorById(duct, endId));
             double current = DiameterOf(ConnectorById(terminal, ownId));
             if (target <= 0.0 || current <= 0.0) return null;
             if (Math.Abs(target - current) < 1e-9) return null;   // already right
+
+            // Told, not deduced. When the user has named the parameter, that is
+            // the end of it — no evidence gathering, no name matching, no chance
+            // of writing the duct's diameter into something unrelated.
+            if (!string.IsNullOrEmpty(mapping.CloserSizeParam))
+                return SetNamed(doc, terminal, ownId, mapping.CloserSizeParam, target);
 
             var lengths = new List<Parameter>();
             try
@@ -250,8 +257,10 @@ namespace FanSelector.Core
             if (driver == null)
                 return "the closer's connection size was left alone: its connector is "
                      + Size(doc, current) + " against the duct's " + Size(doc, target)
-                     + ", and no parameter of the closer holds that " + Size(doc, current)
-                     + ", so there is nothing that can be shown to drive it.";
+                     + ", and nothing writable on it holds that " + Size(doc, current)
+                     + " for this to follow.\n\nName the parameter that sets its connection diameter under "
+                     + "\"Connection size parameter\" in Options, and it will be set outright instead of "
+                     + "looked for.\n\n" + WhatItHas(doc, terminal);
 
             string name = driver.Definition.Name;
 
@@ -270,6 +279,70 @@ namespace FanSelector.Core
                      + ", so something else drives it.";
 
             return null;
+        }
+
+        /// <summary>
+        /// Write the duct's diameter into the parameter the user named for it.
+        /// Told, not deduced: no evidence gathering and no name matching, so it
+        /// cannot end up writing the diameter into something unrelated.
+        /// </summary>
+        private static string SetNamed(Document doc, FamilyInstance terminal, int ownId,
+                                       string parameterName, double target)
+        {
+            Parameter parameter;
+            try { parameter = terminal.LookupParameter(parameterName); }
+            catch { parameter = null; }
+
+            if (parameter == null)
+                return "the closer's size was left alone: it has no instance parameter called \""
+                     + parameterName + "\". Check \"Connection size parameter\" in Options.";
+
+            if (parameter.IsReadOnly)
+                return "the closer's size was left alone: \"" + parameterName + "\" is read-only on the "
+                     + "placed terminal, so it cannot be what sets the diameter.";
+
+            if (parameter.StorageType != StorageType.Double)
+                return "the closer's size was left alone: \"" + parameterName + "\" does not hold a length.";
+
+            try { parameter.Set(target); }
+            catch (Exception exception)
+            {
+                return "the closer's size could not be set through \"" + parameterName + "\" ("
+                     + exception.Message + ").";
+            }
+
+            doc.Regenerate();
+
+            double now = DiameterOf(ConnectorById(terminal, ownId));
+            if (Math.Abs(now - target) > 1e-6)
+                return "\"" + parameterName + "\" was set to " + Size(doc, target) + ", but the closer's "
+                     + "connector reads " + Size(doc, now) + ", so that parameter is not what drives it.";
+
+            return null;
+        }
+
+        /// <summary>
+        /// The closer's own numeric parameters, so the right name can be picked
+        /// out of the message rather than hunted for in the family.
+        /// </summary>
+        private static string WhatItHas(Document doc, FamilyInstance terminal)
+        {
+            var lines = new List<string>();
+            try
+            {
+                foreach (Parameter parameter in terminal.Parameters)
+                {
+                    if (parameter == null || parameter.Definition == null) continue;
+                    if (parameter.StorageType != StorageType.Double || !parameter.HasValue) continue;
+
+                    lines.Add(parameter.Definition.Name + " = " + Size(doc, parameter.AsDouble())
+                              + (parameter.IsReadOnly ? "  (read-only)" : string.Empty));
+                }
+            }
+            catch { /* report whatever was collected */ }
+
+            if (lines.Count == 0) return "The closer reports no numeric instance parameters.";
+            return "Its numeric instance parameters are:\n  " + string.Join("\n  ", lines.ToArray());
         }
 
         /// <summary>A length in the project's own units, for saying what went wrong.</summary>

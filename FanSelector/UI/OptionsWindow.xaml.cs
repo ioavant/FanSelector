@@ -410,6 +410,30 @@ namespace FanSelector.UI
         }
 
         /// <summary>
+        /// Offer the closer family's own instance parameters to choose the size
+        /// one from. Free text as well, because a family not yet loaded has none
+        /// to offer and the name is still worth recording.
+        /// </summary>
+        private void FillCloserSizeParams(FamilyMapping mapping)
+        {
+            var names = new List<string>();
+            try
+            {
+                FamilyCatalog closer = FamilyCatalog.For(_doc, mapping.CloserFamily);
+                if (closer.IsUsable)
+                    names = closer.Parameters
+                        .Where(p => p.IsInstance && !p.IsReadOnly && p.Storage == StorageType.Double)
+                        .Select(p => p.Name)
+                        .OrderBy(n => n, StringComparer.CurrentCultureIgnoreCase)
+                        .ToList();
+            }
+            catch { /* the closer family cannot be read; free text still works */ }
+
+            CloserSizeBox.ItemsSource = names;
+            CloserSizeBox.Text = mapping.CloserSizeParam ?? string.Empty;
+        }
+
+        /// <summary>
         /// The closer name and the stub length are free text, so they have no
         /// event that writes them back. Committing them before the panel reloads
         /// is what stops a typed value from being lost by switching family.
@@ -420,6 +444,9 @@ namespace FanSelector.UI
 
             _current.CloserFamily = string.IsNullOrWhiteSpace(CloserBox.Text)
                 ? FamilyMapping.DefaultCloserFamily : CloserBox.Text.Trim();
+
+            _current.CloserSizeParam = string.IsNullOrWhiteSpace(CloserSizeBox.Text)
+                ? null : CloserSizeBox.Text.Trim();
 
             double feet;
             if (RevitUnits.TryParse(_units, SpecTypeId.Length, StubLengthBox.Text, out feet) && feet > 0.0)
@@ -464,6 +491,7 @@ namespace FanSelector.UI
                 StubBox.IsChecked = mapping.AddDuctStub;
                 StubDetails.IsEnabled = mapping.AddDuctStub;
                 CloserBox.Text = mapping.CloserFamily ?? FamilyMapping.DefaultCloserFamily;
+                FillCloserSizeParams(mapping);
                 StubLengthBox.Text = RevitUnits.Format(_units, SpecTypeId.Length, mapping.StubLengthFt);
 
                 _file = CatalogFile.For(mapping.CatalogPath);
