@@ -228,29 +228,35 @@ namespace FanSelector.Core
             if (!string.IsNullOrEmpty(mapping.CloserSizeParam))
                 return SetNamed(doc, terminal, ownId, mapping.CloserSizeParam, target);
 
-            var lengths = new List<Parameter>();
+            // Every writable number, whatever kind it was declared as. Requiring
+            // the Length spec was an assumption about how the family was authored,
+            // and it threw away the answer: AT_Fan Closer's "Diameter" is writable
+            // and holds exactly the connector's size, but did not survive that
+            // filter. The VALUE is the evidence; the spec it was declared with is
+            // not.
+            var candidates = new List<Parameter>();
             try
             {
                 foreach (Parameter parameter in terminal.Parameters)
                 {
                     if (parameter == null || parameter.Definition == null) continue;
                     if (parameter.IsReadOnly || parameter.StorageType != StorageType.Double) continue;
-
-                    ForgeTypeId spec = RevitUnits.SpecOf(parameter);
-                    if (spec == null || spec.TypeId != SpecTypeId.Length.TypeId) continue;
-                    lengths.Add(parameter);
+                    if (!parameter.HasValue) continue;
+                    candidates.Add(parameter);
                 }
             }
             catch { return null; }
 
-            // ONLY a parameter that currently equals the connector's diameter.
-            // There is no name-based fallback: a parameter called "Size" or
-            // "Duct" that does not hold the diameter is not evidence of anything,
-            // and writing the duct's diameter into it produces a closer at some
-            // unrelated fixed size — which is precisely what a name-matched
-            // fallback here did.
-            List<Parameter> driving = lengths
-                .Where(p => Math.Abs(p.AsDouble() - current) < 1e-7)
+            // ONLY a parameter that currently equals the connector's diameter —
+            // there is still no name-based fallback, because a parameter called
+            // "Size" that does not hold the diameter is evidence of nothing.
+            //
+            // A hundredth of a millimetre, not a millionth: the two numbers come
+            // from a parameter and from connector geometry, and they agree to
+            // within representation noise rather than to the bit.
+            const double SameSize = 1e-4;   // feet, ≈ 0.03 mm
+            List<Parameter> driving = candidates
+                .Where(p => Math.Abs(p.AsDouble() - current) < SameSize)
                 .ToList();
 
             Parameter driver = Hinted(driving) ?? driving.FirstOrDefault();
