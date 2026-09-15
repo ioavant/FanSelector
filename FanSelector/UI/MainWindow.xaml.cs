@@ -75,7 +75,60 @@ namespace FanSelector.UI
             }
 
             ToleranceBox.Text = _settings.TolerancePercent.ToString("0.#", CultureInfo.CurrentCulture);
+            FillSystemTypes();
             LoadFamilies(null);
+        }
+
+        // ── Chromeless window ─────────────────────────────────────────────────
+
+        /// <summary>
+        /// With no title bar there is nothing to drag the window by, so the
+        /// header does the job. Guarded against the double-click that would
+        /// otherwise start a drag and immediately stop.
+        /// </summary>
+        private void OnHeaderDrag(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            if (e.ClickCount != 1) return;
+            try { DragMove(); }
+            catch { /* the mouse was released before the drag began */ }
+        }
+
+        private void OnClose(object sender, RoutedEventArgs e)
+        {
+            Close();
+        }
+
+        // ── Duct system for a generated stub ──────────────────────────────────
+
+        /// <summary>"(automatic)" is a real answer: the stub then joins the system
+        /// the fan's own connector already belongs to.</summary>
+        private const string Automatic = "(automatic)";
+
+        private void FillSystemTypes()
+        {
+            var items = new List<string> { Automatic };
+            items.AddRange(ParameterScanner.DuctSystemTypes(_doc));
+
+            string stored = _settings.DuctSystemType;
+            if (!string.IsNullOrEmpty(stored) &&
+                !items.Contains(stored, StringComparer.OrdinalIgnoreCase)) items.Add(stored);
+
+            SystemTypeBox.ItemsSource = items;
+            SystemTypeBox.SelectedItem = string.IsNullOrEmpty(stored)
+                ? Automatic
+                : items.FirstOrDefault(n => string.Equals(n, stored, StringComparison.OrdinalIgnoreCase))
+                  ?? Automatic;
+        }
+
+        private void OnSystemTypeChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (_settings == null) return;
+            string chosen = SystemTypeBox.SelectedItem as string;
+            _settings.DuctSystemType = string.IsNullOrEmpty(chosen) || chosen == Automatic ? null : chosen;
+
+            // Saved as it changes: it is a standing preference, not something to
+            // re-pick every time the window opens.
+            _settings.Save();
         }
 
         // ── Family selection ──────────────────────────────────────────────────
@@ -310,6 +363,7 @@ namespace FanSelector.UI
                      + "\n\nTried: " + FanSettings.CurrentLocation);
 
             ToleranceBox.Text = _settings.TolerancePercent.ToString("0.#", CultureInfo.CurrentCulture);
+            FillSystemTypes();
             LoadFamilies(previous);
         }
 

@@ -44,6 +44,13 @@ namespace FanSelector.Core
             if (levelId == ElementId.InvalidElementId)
                 return "The fan was placed, but no level could be found to host a duct stub on.";
 
+            // Noted before anything is created: once the stub is on, this is how
+            // the fan's own joint is found again to check it survived, and the
+            // diameter it should have handed on.
+            int outletId = outlet.Id;
+            XYZ outletOrigin = outlet.Origin;
+            double outletDiameter = DiameterOf(outlet);
+
             string trouble;
             Duct duct = CreateDuct(doc, ductTypeId, levelId, outlet, mapping.StubLengthFt, out trouble);
             if (duct == null) return "The fan was placed, but the duct stub could not be created: " + trouble;
@@ -73,13 +80,17 @@ namespace FanSelector.Core
             FamilyInstance terminal;
             try
             {
-                // Placed free rather than hosted on the duct. Hosting lets Revit
-                // decide the orientation, and what it decides is a terminal
-                // tapping into the duct's SIDE — square to the run. Capping the
-                // open end wants the terminal coaxial with it, so it is placed
-                // loose and then aligned onto the connector by hand.
+                // Hosted on the duct on purpose: this IS Revit's "Air Terminal on
+                // Duct" placement, and it is what makes the terminal adopt the
+                // duct's size instead of keeping the family's default. Nothing
+                // else does that — sizing it afterwards means guessing which
+                // parameter drives the connector, which is how it ended up at the
+                // family's default 900 mm regardless of the fan.
+                //
+                // What hosting does NOT get right is the orientation for capping
+                // an open end, so that is corrected below, by hand.
                 terminal = doc.Create.NewFamilyInstance(
-                    open.Origin, closer, StructuralType.NonStructural);
+                    open.Origin, closer, duct, StructuralType.NonStructural);
             }
             catch (Exception exception)
             {
@@ -92,11 +103,27 @@ namespace FanSelector.Core
             doc.Regenerate();
 
             var notes = new List<string>();
-            string fitNote = FitToEnd(doc, terminal, duct);
+
+            // Said before anything else, because if the stub itself came out the
+            // wrong size then nothing downstream of it can be right, and the
+            // difference between "the duct is wrong" and "the closer is wrong" is
+            // the whole diagnosis.
+            double stubDiameter = DiameterOf(ConnectorById(duct, FarEndId(duct, outletOrigin)));
+            if (outletDiameter > 0.0 && stubDiameter > 0.0
+                && Math.Abs(stubDiameter - outletDiameter) > 1e-6)
+                notes.Add("the stub came out " + Size(doc, stubDiameter) + " where the fan's connector is "
+                          + Size(doc, outletDiameter) + ", so it did not take the connector's size.");
+
+            string fitNote = FitToEnd(doc, terminal, duct, outletOrigin);
             if (fitNote != null) notes.Add(fitNote);
 
             string flowNote = SetFlow(terminal, requestedAirFlow);
             if (flowNote != null) notes.Add(flowNote);
+
+            // The whole point is a stub ON the fan. Checked rather than assumed,
+            // because moving anything in a connected network moves the rest of it.
+            if (!StillJoined(fan, outletId))
+                notes.Add("the stub came away from the fan's connector while the closer was fitted.");
 
             return notes.Count == 0 ? null
                  : "The fan, its stub and the closer were placed, but: " + string.Join(" ", notes.ToArray());
@@ -111,16 +138,30 @@ namespace FanSelector.Core
         /// OPPOSITE — each points into the other — which is why the wanted
         /// direction is the duct connector's axis negated.
         /// </summary>
-        private static string FitToEnd(Document doc, FamilyInstance terminal, Duct duct)
+        private static string FitToEnd(Document doc, FamilyInstance terminal, Duct duct, XYZ fanOrigin)
         {
+            // Hosting has by now given the terminal the duct's size, which is the
+            // only reason it was hosted. From here it has to come off: nothing may
+            // be moved while joined to something else, because Revit drags the
+            // connected network along, and rotating a terminal still snapped to
+            // the stub swings the stub — and the fan at its far end — out of
+            // place. The size stays; it is a value on the instance, not a
+            // consequence of the joint.
+            Detach(doc, terminal);
+
             int ownId, endId;
             if (!FreeConnectorId(terminal, out ownId))
                 return "the closer has no free duct connector, so it is not joined to the stub.";
-            if (!FreeConnectorId(duct, out endId))
-                return "the stub's open end could not be found again, so the closer is not joined to it.";
 
-            // Size first: changing it moves the family's own geometry, so there is
-            // no point aligning a connector that is about to shift.
+            // The end to cap is the one AWAY from the fan. Picking "the first
+            // unconnected one" is a coin toss whenever the stub is not yet joined
+            // to the fan, and getting it wrong caps the wrong end.
+            endId = FarEndId(duct, fanOrigin);
+            if (endId < 0)
+                return "the stub's open end could not be found, so the closer is not joined to it.";
+
+            // Size before alignment: changing it moves the family's own geometry,
+            // so there is no point aligning a connector that is about to shift.
             string sizeNote = MatchSize(doc, terminal, ownId, duct, endId);
 
             try
@@ -195,14 +236,24 @@ namespace FanSelector.Core
             }
             catch { return null; }
 
+            // ONLY a parameter that currently equals the connector's diameter.
+            // There is no name-based fallback: a parameter called "Size" or
+            // "Duct" that does not hold the diameter is not evidence of anything,
+            // and writing the duct's diameter into it produces a closer at some
+            // unrelated fixed size — which is precisely what a name-matched
+            // fallback here did.
             List<Parameter> driving = lengths
                 .Where(p => Math.Abs(p.AsDouble() - current) < 1e-7)
                 .ToList();
 
-            Parameter driver = Hinted(driving) ?? driving.FirstOrDefault() ?? Hinted(lengths);
+            Parameter driver = Hinted(driving) ?? driving.FirstOrDefault();
             if (driver == null)
-                return "the closer's connection size could not be matched to the duct — no parameter of it "
-                     + "holds the connector's diameter.";
+                return "the closer's connection size was left alone: its connector is "
+                     + Size(doc, current) + " against the duct's " + Size(doc, target)
+                     + ", and no parameter of the closer holds that " + Size(doc, current)
+                     + ", so there is nothing that can be shown to drive it.";
+
+            string name = driver.Definition.Name;
 
             try { driver.Set(target); }
             catch (Exception exception)
@@ -214,10 +265,18 @@ namespace FanSelector.Core
 
             double now = DiameterOf(ConnectorById(terminal, ownId));
             if (Math.Abs(now - target) > 1e-6)
-                return "\"" + driver.Definition.Name + "\" was set on the closer, but its connector is "
-                     + "still a different size from the duct, so something else drives it.";
+                return "\"" + name + "\" was set to " + Size(doc, target) + " on the closer, but its "
+                     + "connector reads " + Size(doc, now) + " against the duct's " + Size(doc, target)
+                     + ", so something else drives it.";
 
             return null;
+        }
+
+        /// <summary>A length in the project's own units, for saying what went wrong.</summary>
+        private static string Size(Document doc, double feet)
+        {
+            try { return RevitUnits.Format(doc.GetUnits(), SpecTypeId.Length, feet); }
+            catch { return feet.ToString("0.###") + " ft"; }
         }
 
         private static Parameter Hinted(List<Parameter> parameters)
@@ -245,6 +304,65 @@ namespace FanSelector.Core
             if (string.IsNullOrEmpty(first)) return second;
             if (string.IsNullOrEmpty(second)) return first;
             return first + " " + second;
+        }
+
+        /// <summary>
+        /// Break every joint an element has, so it can be moved on its own.
+        /// </summary>
+        private static void Detach(Document doc, Element element)
+        {
+            try
+            {
+                foreach (Connector own in Connectors(element))
+                {
+                    if (!own.IsConnected) continue;
+
+                    // Collected first: disconnecting while enumerating AllRefs
+                    // mutates what is being walked.
+                    var joined = new List<Connector>();
+                    foreach (Connector other in own.AllRefs)
+                        if (other.Owner != null && other.Owner.Id != element.Id) joined.Add(other);
+
+                    foreach (Connector other in joined)
+                    {
+                        try { own.DisconnectFrom(other); } catch { /* already apart */ }
+                    }
+                }
+                doc.Regenerate();
+            }
+            catch { /* nothing joined, or nothing that can be parted */ }
+        }
+
+        /// <summary>
+        /// The stub's connector farthest from the fan — the end to cap. Distance
+        /// decides it rather than connection state, which is only trustworthy once
+        /// the fan joint has actually been made.
+        /// </summary>
+        private static int FarEndId(Duct duct, XYZ fanOrigin)
+        {
+            int best = -1;
+            double farthest = -1.0;
+            foreach (Connector connector in Connectors(duct))
+            {
+                try
+                {
+                    double distance = connector.Origin.DistanceTo(fanOrigin);
+                    if (distance > farthest) { farthest = distance; best = connector.Id; }
+                }
+                catch { /* skip a connector that will not report a position */ }
+            }
+            return best;
+        }
+
+        /// <summary>Whether the fan's own connector still has the stub on it.</summary>
+        private static bool StillJoined(FamilyInstance fan, int outletId)
+        {
+            try
+            {
+                Connector outlet = ConnectorById(fan, outletId);
+                return outlet != null && outlet.IsConnected;
+            }
+            catch { return false; }
         }
 
         private static Connector ConnectorById(Element owner, int id)

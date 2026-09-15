@@ -93,17 +93,11 @@
         <TextBlock x:Name="OffsetUnitText" Grid.Row="0" Grid.Column="6"
                    VerticalAlignment="Center" Margin="6,0,0,0" />
 
-        <!-- Used by a generated duct stub. Left empty, the stub takes the system
-             type of the fan connector it grows from and the project's first duct
-             type — which is what Revit would have done unasked. -->
-        <TextBlock Grid.Row="1" Grid.Column="0" Text="Duct system type"
+        <!-- The duct system type lives on the main window instead, beside the
+             stub tick — it is decided per placement, not per configuration. -->
+        <TextBlock Grid.Row="1" Grid.Column="0" Text="Duct type for a stub"
                    VerticalAlignment="Center" Margin="0,8,8,0" />
-        <ComboBox x:Name="SystemTypeBox" Grid.Row="1" Grid.Column="1" Width="170"
-                  HorizontalAlignment="Left" Margin="0,8,0,0" />
-
-        <TextBlock Grid.Row="1" Grid.Column="4" Text="Duct type"
-                   VerticalAlignment="Center" Margin="0,8,8,0" />
-        <ComboBox x:Name="DuctTypeBox" Grid.Row="1" Grid.Column="5" Width="170"
+        <ComboBox x:Name="DuctTypeBox" Grid.Row="1" Grid.Column="1" Width="170"
                   HorizontalAlignment="Left" Margin="0,8,0,0" />
       </Grid>
     </Border>

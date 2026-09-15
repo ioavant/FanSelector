@@ -76,7 +76,6 @@ namespace FanSelector.UI
             OffsetUnitText.Text = RevitUnits.Symbol(_units, SpecTypeId.Length);
             StubUnitText.Text = RevitUnits.Symbol(_units, SpecTypeId.Length);
 
-            FillAutomatic(SystemTypeBox, ParameterScanner.DuctSystemTypes(_doc), Settings.DuctSystemType);
             FillAutomatic(DuctTypeBox, ParameterScanner.DuctTypes(_doc), Settings.DuctType);
             CloserBox.ItemsSource = ParameterScanner.AirTerminalFamilies(_doc);
             LocationText.Text = "Shared by every Revit version on this machine, stored in:\n"
@@ -744,7 +743,6 @@ namespace FanSelector.UI
 
             Settings.TolerancePercent = tolerance;
             Settings.SetMountingOffsetFt(offsetFt);
-            Settings.DuctSystemType = Chosen(SystemTypeBox);
             Settings.DuctType = Chosen(DuctTypeBox);
             DialogResult = true;
         }
