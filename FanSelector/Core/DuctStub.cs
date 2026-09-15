@@ -80,13 +80,17 @@ namespace FanSelector.Core
             FamilyInstance terminal;
             try
             {
-                // Placed free rather than hosted on the duct. Hosting lets Revit
-                // decide the orientation, and what it decides is a terminal
-                // tapping into the duct's SIDE — square to the run. Capping the
-                // open end wants the terminal coaxial with it, so it is placed
-                // loose and then aligned onto the connector by hand.
+                // Hosted on the duct on purpose: this IS Revit's "Air Terminal on
+                // Duct" placement, and it is what makes the terminal adopt the
+                // duct's size instead of keeping the family's default. Nothing
+                // else does that — sizing it afterwards means guessing which
+                // parameter drives the connector, which is how it ended up at the
+                // family's default 900 mm regardless of the fan.
+                //
+                // What hosting does NOT get right is the orientation for capping
+                // an open end, so that is corrected below, by hand.
                 terminal = doc.Create.NewFamilyInstance(
-                    open.Origin, closer, StructuralType.NonStructural);
+                    open.Origin, closer, duct, StructuralType.NonStructural);
             }
             catch (Exception exception)
             {
@@ -136,10 +140,13 @@ namespace FanSelector.Core
         /// </summary>
         private static string FitToEnd(Document doc, FamilyInstance terminal, Duct duct, XYZ fanOrigin)
         {
-            // Nothing may be moved while it is joined to something else: Revit
-            // drags a connected network along, so rotating a terminal that had
-            // already snapped onto the stub would swing the stub — and with it the
-            // fan at the far end — out of place. Detach, fit, then join.
+            // Hosting has by now given the terminal the duct's size, which is the
+            // only reason it was hosted. From here it has to come off: nothing may
+            // be moved while joined to something else, because Revit drags the
+            // connected network along, and rotating a terminal still snapped to
+            // the stub swings the stub — and the fan at its far end — out of
+            // place. The size stays; it is a value on the instance, not a
+            // consequence of the joint.
             Detach(doc, terminal);
 
             int ownId, endId;
