@@ -45,9 +45,11 @@ namespace FanSelector.Core
                 return "The fan was placed, but no level could be found to host a duct stub on.";
 
             // Noted before anything is created: once the stub is on, this is how
-            // the fan's own joint is found again to check it survived.
+            // the fan's own joint is found again to check it survived, and the
+            // diameter it should have handed on.
             int outletId = outlet.Id;
             XYZ outletOrigin = outlet.Origin;
+            double outletDiameter = DiameterOf(outlet);
 
             string trouble;
             Duct duct = CreateDuct(doc, ductTypeId, levelId, outlet, mapping.StubLengthFt, out trouble);
@@ -97,6 +99,17 @@ namespace FanSelector.Core
             doc.Regenerate();
 
             var notes = new List<string>();
+
+            // Said before anything else, because if the stub itself came out the
+            // wrong size then nothing downstream of it can be right, and the
+            // difference between "the duct is wrong" and "the closer is wrong" is
+            // the whole diagnosis.
+            double stubDiameter = DiameterOf(ConnectorById(duct, FarEndId(duct, outletOrigin)));
+            if (outletDiameter > 0.0 && stubDiameter > 0.0
+                && Math.Abs(stubDiameter - outletDiameter) > 1e-6)
+                notes.Add("the stub came out " + Size(doc, stubDiameter) + " where the fan's connector is "
+                          + Size(doc, outletDiameter) + ", so it did not take the connector's size.");
+
             string fitNote = FitToEnd(doc, terminal, duct, outletOrigin);
             if (fitNote != null) notes.Add(fitNote);
 
@@ -216,14 +229,24 @@ namespace FanSelector.Core
             }
             catch { return null; }
 
+            // ONLY a parameter that currently equals the connector's diameter.
+            // There is no name-based fallback: a parameter called "Size" or
+            // "Duct" that does not hold the diameter is not evidence of anything,
+            // and writing the duct's diameter into it produces a closer at some
+            // unrelated fixed size — which is precisely what a name-matched
+            // fallback here did.
             List<Parameter> driving = lengths
                 .Where(p => Math.Abs(p.AsDouble() - current) < 1e-7)
                 .ToList();
 
-            Parameter driver = Hinted(driving) ?? driving.FirstOrDefault() ?? Hinted(lengths);
+            Parameter driver = Hinted(driving) ?? driving.FirstOrDefault();
             if (driver == null)
-                return "the closer's connection size could not be matched to the duct — no parameter of it "
-                     + "holds the connector's diameter.";
+                return "the closer's connection size was left alone: its connector is "
+                     + Size(doc, current) + " against the duct's " + Size(doc, target)
+                     + ", and no parameter of the closer holds that " + Size(doc, current)
+                     + ", so there is nothing that can be shown to drive it.";
+
+            string name = driver.Definition.Name;
 
             try { driver.Set(target); }
             catch (Exception exception)
@@ -235,10 +258,18 @@ namespace FanSelector.Core
 
             double now = DiameterOf(ConnectorById(terminal, ownId));
             if (Math.Abs(now - target) > 1e-6)
-                return "\"" + driver.Definition.Name + "\" was set on the closer, but its connector is "
-                     + "still a different size from the duct, so something else drives it.";
+                return "\"" + name + "\" was set to " + Size(doc, target) + " on the closer, but its "
+                     + "connector reads " + Size(doc, now) + " against the duct's " + Size(doc, target)
+                     + ", so something else drives it.";
 
             return null;
+        }
+
+        /// <summary>A length in the project's own units, for saying what went wrong.</summary>
+        private static string Size(Document doc, double feet)
+        {
+            try { return RevitUnits.Format(doc.GetUnits(), SpecTypeId.Length, feet); }
+            catch { return feet.ToString("0.###") + " ft"; }
         }
 
         private static Parameter Hinted(List<Parameter> parameters)
