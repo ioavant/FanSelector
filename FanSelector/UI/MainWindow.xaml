@@ -222,6 +222,28 @@
           <ComboBox Grid.Column="5" x:Name="SystemTypeBox" Width="170" VerticalAlignment="Center"
                     SelectionChanged="OnSystemTypeChanged"
                     ToolTip="System the generated stub joins. Left automatic, it follows the fan connector's own system." />
+
+          <!-- Only shown for a family that can build attenuators. Deliberately
+               small: it is a narrow option, not a headline feature. -->
+          <StackPanel Grid.Column="6" x:Name="SilencerPanel" Orientation="Horizontal"
+                      VerticalAlignment="Center" HorizontalAlignment="Left"
+                      Margin="20,0,0,0" Visibility="Collapsed">
+            <TextBlock Text="Silencer D" Style="{StaticResource FieldLabel}" />
+            <TextBlock Text="in" Style="{StaticResource FieldLabel}" />
+            <ComboBox x:Name="SilencerInBox" Width="46" VerticalAlignment="Center"
+                      ToolTip="Attenuator on the inlet, in duct diameters: 0 none, 1 one diameter long, 2 two.">
+              <ComboBoxItem Content="0" IsSelected="True" />
+              <ComboBoxItem Content="1" />
+              <ComboBoxItem Content="2" />
+            </ComboBox>
+            <TextBlock Text="out" Style="{StaticResource FieldLabel}" Margin="8,0,6,0" />
+            <ComboBox x:Name="SilencerOutBox" Width="46" VerticalAlignment="Center"
+                      ToolTip="Attenuator on the outlet, in duct diameters: 0 none, 1 one diameter long, 2 two.">
+              <ComboBoxItem Content="0" IsSelected="True" />
+              <ComboBoxItem Content="1" />
+              <ComboBoxItem Content="2" />
+            </ComboBox>
+          </StackPanel>
         </Grid>
 
         <Grid>

@@ -48,7 +48,9 @@ namespace FanSelector.Commands
                 window.SelectedMapping,
                 window.CurrentSettings,
                 window.RequestedAirFlow,
-                window.StubRequested);
+                window.StubRequested,
+                window.SilencerIn,
+                window.SilencerOut);
 
             if (placement.Cancelled) return Result.Cancelled;
 

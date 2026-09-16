@@ -41,9 +41,12 @@ namespace FanSelector.Core
         /// from the family's own setting. Whether THIS fan gets a stub is a
         /// property of the placement, not of the family.
         /// </param>
+        /// <param name="silencerIn">Inlet attenuator length in duct diameters; 0 for none.</param>
+        /// <param name="silencerOut">Outlet attenuator length in duct diameters; 0 for none.</param>
         public static PlacementResult Place(UIDocument uidoc, FanCandidate candidate,
                                             FamilyMapping mapping, FanSettings settings,
-                                            double requestedAirFlow, bool addStub)
+                                            double requestedAirFlow, bool addStub,
+                                            int silencerIn, int silencerOut)
         {
             if (uidoc == null || candidate == null) return PlacementResult.Fail("Nothing to place.");
 
@@ -95,6 +98,12 @@ namespace FanSelector.Core
 
                     string writeNote = WriteFigures(instance, mapping, candidate);
 
+                    // Before the stub: attenuators lengthen the fan, and a stub
+                    // grown first would be left hanging where the connector used
+                    // to be. Regenerate so the connectors are where they now are.
+                    string silencerNote = Silencers.Apply(instance, silencerIn, silencerOut);
+                    if (silencerIn > 0 || silencerOut > 0) doc.Regenerate();
+
                     string stubNote = addStub
                         ? DuctStub.Build(doc, instance, mapping, settings, requestedAirFlow)
                         : null;
@@ -103,7 +112,7 @@ namespace FanSelector.Core
                     return new PlacementResult
                     {
                         Placed = true,
-                        Message = Join(Join(typeNote, writeNote), stubNote)
+                        Message = Join(Join(Join(typeNote, writeNote), silencerNote), stubNote)
                     };
                 }
                 catch (Exception exception)

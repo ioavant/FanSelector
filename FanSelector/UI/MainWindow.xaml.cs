@@ -38,6 +38,18 @@ namespace FanSelector.UI
         /// <summary>Whether the fan about to be placed should get a duct stub.</summary>
         public bool StubRequested { get { return StubBox.IsChecked == true; } }
 
+        /// <summary>Inlet attenuator length in duct diameters, 0 when the family has none.</summary>
+        public int SilencerIn { get { return Chosen(SilencerInBox); } }
+
+        /// <summary>Outlet attenuator length in duct diameters.</summary>
+        public int SilencerOut { get { return Chosen(SilencerOutBox); } }
+
+        private int Chosen(ComboBox box)
+        {
+            if (SilencerPanel.Visibility != System.Windows.Visibility.Visible) return 0;
+            return box.SelectedIndex < 0 ? 0 : box.SelectedIndex;   // the items are 0, 1, 2 in order
+        }
+
         /// <summary>
         /// The air flow the last search asked for, in internal units. Handed to
         /// placement, where a generated duct stub's terminal is given the DUTY
@@ -96,6 +108,31 @@ namespace FanSelector.UI
         private void OnClose(object sender, RoutedEventArgs e)
         {
             Close();
+        }
+
+        // ── Attenuators ───────────────────────────────────────────────────────
+
+        /// <summary>
+        /// The attenuator fields belong to families that can actually build them,
+        /// and to no others. Asked of the family rather than decided from its
+        /// name, so this stays true of any family authored the same way.
+        ///
+        /// Reading a family definition is not instant; it is cached for the
+        /// session, so this costs once per family.
+        /// </summary>
+        private void ShowSilencers(FamilyMapping mapping)
+        {
+            bool available = false;
+            if (mapping != null)
+            {
+                System.Windows.Input.Mouse.OverrideCursor = System.Windows.Input.Cursors.Wait;
+                try { available = Silencers.Available(_doc, mapping.FamilyName); }
+                finally { System.Windows.Input.Mouse.OverrideCursor = null; }
+            }
+
+            SilencerPanel.Visibility = available
+                ? System.Windows.Visibility.Visible
+                : System.Windows.Visibility.Collapsed;
         }
 
         // ── Duct system for a generated stub ──────────────────────────────────
@@ -159,6 +196,7 @@ namespace FanSelector.UI
             _familyImage = mapping == null ? null : WindowSupport.Image(FanImages.For(mapping.FamilyName));
             PreviewImage.Source = _familyImage;
             StubBox.IsChecked = mapping != null && mapping.AddDuctStub;
+            ShowSilencers(mapping);
 
             if (mapping == null)
             {
