@@ -52,14 +52,20 @@ namespace FanSelector.Core
         /// or what could not be set — never throws, because a fan that is already
         /// in the model is not worth losing over an attenuator.
         /// </summary>
-        public static string Apply(FamilyInstance fan, int inDiameters, int outDiameters)
+        /// <param name="inDiameters">
+        /// Null means this family has no attenuators and nothing is touched. ZERO
+        /// is a value like any other and IS written: these parameters default to
+        /// 1 in the family, so skipping the write for zero leaves a fan with
+        /// attenuators nobody asked for.
+        /// </param>
+        public static string Apply(FamilyInstance fan, int? inDiameters, int? outDiameters)
         {
             if (fan == null) return null;
-            if (inDiameters <= 0 && outDiameters <= 0) return null;
+            if (!inDiameters.HasValue && !outDiameters.HasValue) return null;
 
             var problems = new List<string>();
-            Set(fan, InParameter, inDiameters, problems);
-            Set(fan, OutParameter, outDiameters, problems);
+            if (inDiameters.HasValue) Set(fan, InParameter, inDiameters.Value, problems);
+            if (outDiameters.HasValue) Set(fan, OutParameter, outDiameters.Value, problems);
 
             return problems.Count == 0 ? null
                  : "the attenuators could not be set: " + string.Join("; ", problems.ToArray()) + ".";

@@ -228,7 +228,7 @@
           <StackPanel Grid.Column="6" x:Name="SilencerPanel" Orientation="Horizontal"
                       VerticalAlignment="Center" HorizontalAlignment="Left"
                       Margin="20,0,0,0" Visibility="Collapsed">
-            <TextBlock Text="Silencer D" Style="{StaticResource FieldLabel}" />
+            <TextBlock Text="Silencer Length xD" Style="{StaticResource FieldLabel}" />
             <TextBlock Text="in" Style="{StaticResource FieldLabel}" />
             <ComboBox x:Name="SilencerInBox" Width="46" VerticalAlignment="Center"
                       ToolTip="Attenuator on the inlet, in duct diameters: 0 none, 1 one diameter long, 2 two.">

@@ -38,15 +38,19 @@ namespace FanSelector.UI
         /// <summary>Whether the fan about to be placed should get a duct stub.</summary>
         public bool StubRequested { get { return StubBox.IsChecked == true; } }
 
-        /// <summary>Inlet attenuator length in duct diameters, 0 when the family has none.</summary>
-        public int SilencerIn { get { return Chosen(SilencerInBox); } }
+        /// <summary>
+        /// Inlet attenuator length in duct diameters, or null when this family has
+        /// no attenuators to set. Null and zero are different answers: zero is a
+        /// fan explicitly without one, and has to be written.
+        /// </summary>
+        public int? SilencerIn { get { return Chosen(SilencerInBox); } }
 
-        /// <summary>Outlet attenuator length in duct diameters.</summary>
-        public int SilencerOut { get { return Chosen(SilencerOutBox); } }
+        /// <summary>Outlet attenuator length in duct diameters, or null as above.</summary>
+        public int? SilencerOut { get { return Chosen(SilencerOutBox); } }
 
-        private int Chosen(ComboBox box)
+        private int? Chosen(ComboBox box)
         {
-            if (SilencerPanel.Visibility != System.Windows.Visibility.Visible) return 0;
+            if (SilencerPanel.Visibility != System.Windows.Visibility.Visible) return null;
             return box.SelectedIndex < 0 ? 0 : box.SelectedIndex;   // the items are 0, 1, 2 in order
         }
 
