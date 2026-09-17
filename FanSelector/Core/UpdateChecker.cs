@@ -19,9 +19,11 @@ namespace FanSelector.Core
     /// </summary>
     internal static class UpdateChecker
     {
-        // Raw URL to version.json in the public releases repository.
+        // Raw URL to version.json on the default branch of the public source
+        // repository, which is also where the releases live. Releases used to be
+        // kept in a separate repository because this one was private.
         private const string VersionUrl =
-            "https://raw.githubusercontent.com/ioavant/FanSelector-releases/main/version.json";
+            "https://raw.githubusercontent.com/ioavant/FanSelector/master/version.json";
 
         public static UpdateInfo AvailableUpdate { get; private set; }
 
