@@ -66,12 +66,13 @@ namespace FanSelector.Core
             }
             catch (Autodesk.Revit.Exceptions.InvalidOperationException)
             {
-                // Raised in views that cannot host a point pick, e.g. a schedule.
+                // Raised in views that cannot host a point pick: a schedule, and
+                // equally a 3D view, which has no work plane to pick on.
                 return PlacementResult.Fail(
-                    "This view does not accept a point. Switch to a plan, section or 3D view and try again.");
+                    "This view does not accept a point. Switch to a plan or a section view and try again.");
             }
 
-            Level level = ResolveLevel(doc, point);
+            Level level = ResolveLevel(uidoc, point);
             if (level == null)
                 return PlacementResult.Fail("The project has no levels, so there is nothing to host the fan on.");
 
@@ -390,12 +391,20 @@ namespace FanSelector.Core
         /// The level to host the instance on: the view's own level in a plan, and
         /// otherwise the nearest level at or below the picked point. Reading
         /// ActiveView.GenLevel unguarded throws in every 3D view and section.
+        ///
+        /// The view is taken from the UIDocument, not the Document: the point was
+        /// picked in the view the user is looking at, and that is the one that has
+        /// to decide the level. Document.ActiveView answers for the document,
+        /// which is not the same thing once a second window is open on it.
         /// </summary>
-        private static Level ResolveLevel(Document doc, XYZ point)
+        private static Level ResolveLevel(UIDocument uidoc, XYZ point)
         {
+            Document doc = uidoc.Document;
+
             try
             {
-                Level viewLevel = doc.ActiveView == null ? null : doc.ActiveView.GenLevel;
+                View active = uidoc.ActiveView;
+                Level viewLevel = active == null ? null : active.GenLevel;
                 if (viewLevel != null) return viewLevel;
             }
             catch { /* some view types throw rather than return null */ }
