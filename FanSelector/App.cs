@@ -38,7 +38,7 @@ namespace FanSelector
                                 + "parameter mapping set up in Options, and lists the ones within "
                                 + "tolerance of the duty you ask for - ranked by closeness, efficiency, "
                                 + "noise or motor power. Choosing one places that exact type.",
-                Image = LoadImage("fanselector_16.png"),
+                Image = LoadImage("fanselector_A_16.png"),
                 LargeImage = LoadImage("fanselector_32.png")
             };
             selectData.SetContextualHelp(help);

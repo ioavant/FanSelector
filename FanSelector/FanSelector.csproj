@@ -91,8 +91,13 @@
 
   <ItemGroup>
     <!-- Product artwork. Brand artwork (web_icon.png, logo.png) is contributed
-         per brand by _branding\Branding.targets, not listed here. -->
-    <EmbeddedResource Include="Resources\*.png" />
+         per brand by _branding\Branding.targets, not listed here.
+
+         Only the two ribbon sizes are embedded. The larger icons in that folder
+         (fanselector_A_48 and up) are for the store listing and the website and
+         would be dead weight inside the add-in. -->
+    <EmbeddedResource Include="Resources\fanselector_A_16.png" />
+    <EmbeddedResource Include="Resources\fanselector_32.png" />
     <EmbeddedResource Include="Resources\*.jpg" />
     <None Include="..\version.json" />
   </ItemGroup>

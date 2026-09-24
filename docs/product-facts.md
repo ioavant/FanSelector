@@ -18,7 +18,7 @@ each consumer styles this its own way.
 - **Name:** Fan Selector
 - **Publisher:** Vixeldorf
 - **Category:** Revit add-in — MEP / HVAC equipment selection
-- **Current version:** 2.0.0
+- **Current version:** 2.0.1
 - **Platform:** Autodesk Revit 2022, 2023, 2024, 2025, 2026 (Windows, 64-bit)
 - **Interface language:** English
 - **Website:** https://www.vixeldorf.com
@@ -200,19 +200,24 @@ equipment and stay untouched.
 
 What exists, in `FanSelector/Resources/`:
 
-- Ribbon icon, 16×16 and 32×32 (`fanselector_16.png`, `fanselector_32.png`).
+- The product icon — a fan wheel with coloured blades — at 16, 24, 32, 48, 64,
+  128, 256 and 512 px (`fanselector_32.png` and the `fanselector_A_*` set).
+  Only the 16 and 32 px versions are embedded in the add-in for the ribbon; the
+  larger ones are there for the store listing and the website.
 - The four fan photographs shown beside the results, 640 px
   (`fan_axial.jpg`, `fan_centrifugal.jpg`, `fan_inline.jpg`, `fan_generic.jpg`).
 
 What a listing or a product page still needs, and cannot be derived from the
 code:
 
-- A 200×200 product icon. AC Link has `ac_icon_200_vixeldorf.png`; Fan Selector
-  has nothing above 32×32.
 - Screenshots from a real project: the results table with a duty entered, the
   Options mapping dialog, and a placed fan with its duct stub and attenuators.
 
 ## Version history
+
+### 2.0.1
+
+- The product's own icon on the ribbon, in place of the placeholder.
 
 ### 2.0.0
 

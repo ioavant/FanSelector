@@ -1,4 +1,4 @@
-# Fan Selector — Autodesk App Store listing (Vixeldorf build, v2.0.0)
+# Fan Selector — Autodesk App Store listing (Vixeldorf build, v2.0.1)
 
 Derived from `product-facts.md`, which is the source of truth for every product
 fact here and on the website. When something changes, change it there first and
@@ -44,9 +44,9 @@ MEP engineers and HVAC modellers who select fans in Revit and are tired of doing
 Supported on Revit 2022 through 2026; pick your versions during setup.
 
 ## App Version
-**Version Number:** 2.0.0
+**Version Number:** 2.0.1
 
-**Version Description:** Fan selection now works with any fan family and its type catalogue, through a mapping you set up in the new Options dialog — the previous version understood only its own bundled families and their fixed parameter names. The search covers every type in the catalogue rather than only the ones already loaded, and inserting a match the project lacks loads the family so Revit applies the catalogue. Adds efficiency / specific fan power and sound power to the figures shown, unlimited user-chosen extra columns, and ranking by closeness, SFP, noise or motor power. A fan can now be placed with a duct stub capped by an air terminal carrying the selected air flow, and — for a family that builds them — inlet and outlet attenuators measured in duct diameters. Rebuilt interface, and placement now hosts the fan on the correct level instead of a fixed height.
+**Version Description:** 2.0.1 gives the add-in its own icon on the ribbon. Everything below arrived in 2.0.0. Fan selection now works with any fan family and its type catalogue, through a mapping you set up in the new Options dialog — the previous version understood only its own bundled families and their fixed parameter names. The search covers every type in the catalogue rather than only the ones already loaded, and inserting a match the project lacks loads the family so Revit applies the catalogue. Adds efficiency / specific fan power and sound power to the figures shown, unlimited user-chosen extra columns, and ranking by closeness, SFP, noise or motor power. A fan can now be placed with a duct stub capped by an air terminal carrying the selected air flow, and — for a family that builds them — inlet and outlet attenuators measured in duct diameters. Rebuilt interface, and placement now hosts the fan on the correct level instead of a fixed height.
 
 ## General Usage Instructions
 1. Click Fan Selector on the Vixeldorf ribbon tab. On the very first run it opens Options by itself, because no family is set up yet; after that, Options is a button at the bottom of the window.

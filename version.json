@@ -1,5 +1,5 @@
 {
-  "version": "2.0.0",
-  "downloadUrl": "https://github.com/ioavant/FanSelector/releases/download/v2.0.0/FanSelectorSetup.msi",
-  "releaseNotes": "Fan selection now works with any loaded family through a parameter mapping"
+  "version": "2.0.1",
+  "downloadUrl": "https://github.com/ioavant/FanSelector/releases/download/v2.0.1/FanSelectorSetup.msi",
+  "releaseNotes": "New product icon on the ribbon"
 }
