@@ -7,7 +7,10 @@
           Condition=" '$(_BrandingPropsImported)' != 'true' " />
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
-    <Platform Condition=" '$(Platform)' == '' ">x86</Platform>
+    <!-- A 64-bit package. Revit 2027's manifest goes under ProgramFiles64Folder,
+         which only resolves in one — and the add-in has never been anything but
+         64-bit. Link Section Box's installer is built the same way. -->
+    <Platform Condition=" '$(Platform)' == '' ">x64</Platform>
     <ProductVersion>3.10</ProductVersion>
     <ProjectGuid>017c78a2-1102-4629-83ac-9ccad2d7dfe6</ProjectGuid>
     <SchemaVersion>2.0</SchemaVersion>
@@ -19,12 +22,12 @@
     <SuppressIces>ICE61</SuppressIces>
   </PropertyGroup>
   <!-- Brand-scoped so both MSIs can be built back to back. -->
-  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|x86' ">
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|x64' ">
     <OutputPath>bin\$(Configuration)\$(Brand)\</OutputPath>
     <IntermediateOutputPath>obj\$(Configuration)\$(Brand)\</IntermediateOutputPath>
     <DefineConstants>Debug</DefineConstants>
   </PropertyGroup>
-  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|x86' ">
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|x64' ">
     <OutputPath>bin\$(Configuration)\$(Brand)\</OutputPath>
     <IntermediateOutputPath>obj\$(Configuration)\$(Brand)\</IntermediateOutputPath>
   </PropertyGroup>

@@ -41,7 +41,7 @@ KEY FEATURES
 WHO IT'S FOR
 MEP engineers and HVAC modellers who select fans in Revit and are tired of doing it in a manufacturer's separate program and then hunting for the matching type by hand. Especially useful for an office with its own fan library: point each family at its catalogue once and the whole library becomes searchable.
 
-Supported on Revit 2022 through 2026; pick your versions during setup.
+Supported on Revit 2022 through 2027; pick your versions during setup.
 
 ## App Version
 **Version Number:** 2.0.1
@@ -59,7 +59,7 @@ Supported on Revit 2022 through 2026; pick your versions during setup.
 8. Click Insert fan (or double-click the row), then click the point in the view where the fan goes. If the type is not in the model yet the family is loaded from its file first, then the type is placed with the mapped figures written onto it.
 
 ## Installation/Uninstallation
-Fan Selector installs via a standard Windows Installer (MSI) package. Files are copied to %ProgramData%\Vixeldorf\FanSelector\, and a .addin manifest is registered for each supported Revit version you select during setup, under %ProgramData%\Autodesk\Revit\Addins\{year} for 2022 through 2026. The example fan families and their type catalogues are installed to %ProgramData%\Vixeldorf\FanSelector\Sample Families\. Administrator rights are required. Restart Revit after installing to load the "Vixeldorf" ribbon tab.
+Fan Selector installs via a standard Windows Installer (MSI) package. Files are copied to %ProgramData%\Vixeldorf\FanSelector\, and a .addin manifest is registered for each supported Revit version you select during setup, under %ProgramData%\Autodesk\Revit\Addins\{year} for 2022 through 2026, and under %ProgramFiles%\Autodesk\Revit\Addins\2027 for Revit 2027, which no longer scans ProgramData. The example fan families and their type catalogues are installed to %ProgramData%\Vixeldorf\FanSelector\Sample Families\. Administrator rights are required. Restart Revit after installing to load the "Vixeldorf" ribbon tab.
 
 To uninstall, use Windows Settings > Apps > Installed apps (or Control Panel > Programs and Features), select "Vixeldorf Fan Selector", and click Uninstall. This removes the DLL, the example families and all per-version .addin manifests. Fans already placed are ordinary Revit mechanical equipment and stay untouched.
 
@@ -67,7 +67,7 @@ To uninstall, use Windows Settings > Apps > Installed apps (or Control Panel > P
 For support, contact us at yoav@vixeldorf.com or via <a href="https://www.vixeldorf.com">vixeldorf.com</a>. Please include your Revit version, the Fan Selector version (shown in the Fan Selector window title), the fan family and catalogue you are selecting from, and a short description or screenshot of the issue. We aim to respond within 5 business days.
 
 ## Additional Information
-<b>Supported Revit versions:</b> 2022, 2023, 2024, 2025, 2026 (single build, 64-bit).<br>
+<b>Supported Revit versions:</b> 2022, 2023, 2024, 2025, 2026, 2027 (single build, 64-bit).<br>
 <b>Category:</b> Mechanical / HVAC.<br>
 <b>Requirements:</b> No third-party dependencies. A fan family (.rfa) with its Revit type catalogue (.csv) beside it under the same name.<br>
 <b>Data storage:</b> Fan Selector adds nothing to your model. It reads performance figures from the family's own type catalogue file, and the only things it writes are the family instance you asked it to place and the figures you mapped onto that instance. The mapping itself lives in a small readable JSON file next to the installed add-in, shared by every Revit version on the machine, so models stay fully usable if the add-in is removed.<br>

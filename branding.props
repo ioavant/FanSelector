@@ -21,10 +21,11 @@
     <!-- IExternalApplication class the .addin manifests point at. -->
     <BrandAppClassName>FanSelector.App</BrandAppClassName>
 
-    <!-- 2022-2026, matching the installer TES already ships. Revit 2027 is a
-         deliberate omission for now: the add-in is one net48 assembly for every
-         version, and 2027 has not been verified against it. -->
-    <BrandSupportedRevitVersions>2022;2023;2024;2025;2026</BrandSupportedRevitVersions>
+    <!-- One net48 assembly for all of them. 2027 hosts .NET 10 where 2025-2026
+         host .NET 8, but that is the runtime loading the add-in, not the add-in
+         itself; the manifest is what actually differs, and it goes to Program
+         Files there instead of ProgramData (see Installer\Product.wxs). -->
+    <BrandSupportedRevitVersions>2022;2023;2024;2025;2026;2027</BrandSupportedRevitVersions>
 
     <!-- The add-in project folder; the engine derives the built DLL path from it.
          The file name is brand-dependent (FanSelector.dll / FanSelector.TES.dll),
@@ -65,6 +66,7 @@
     <BrandAddinComponent Include="2024"><Guid>D653C079-E0B3-4BEA-8262-F06EE68DBB14</Guid></BrandAddinComponent>
     <BrandAddinComponent Include="2025"><Guid>29A675FA-7836-4636-A093-7E9E526CB9BF</Guid></BrandAddinComponent>
     <BrandAddinComponent Include="2026"><Guid>B0F9FBD2-A361-4F53-88A3-3C0F7EE991B6</Guid></BrandAddinComponent>
+    <BrandAddinComponent Include="2027"><Guid>379B0C7A-02DE-49DE-9EF6-A7D35E3B8CE1</Guid></BrandAddinComponent>
   </ItemGroup>
 
   <!-- ================================================================= -->
@@ -86,6 +88,7 @@
     <BrandAddinComponent Include="2024"><Guid>73DDACCA-79B0-4477-B645-601F120B71FC</Guid></BrandAddinComponent>
     <BrandAddinComponent Include="2025"><Guid>9372953D-4D93-47DE-82DD-362BB4B19E32</Guid></BrandAddinComponent>
     <BrandAddinComponent Include="2026"><Guid>85D82B5F-651A-4B12-B4D5-B5D55AE527C3</Guid></BrandAddinComponent>
+    <BrandAddinComponent Include="2027"><Guid>29675B9F-1FEA-4739-9C18-C856B50BDF61</Guid></BrandAddinComponent>
   </ItemGroup>
 
 </Project>

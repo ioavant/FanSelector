@@ -19,7 +19,7 @@ each consumer styles this its own way.
 - **Publisher:** Vixeldorf
 - **Category:** Revit add-in — MEP / HVAC equipment selection
 - **Current version:** 2.0.1
-- **Platform:** Autodesk Revit 2022, 2023, 2024, 2025, 2026 (Windows, 64-bit)
+- **Platform:** Autodesk Revit 2022 through 2027 (Windows, 64-bit)
 - **Interface language:** English
 - **Website:** https://www.vixeldorf.com
 - **Support:** yoav@vixeldorf.com, answered within 5 business days
@@ -123,7 +123,7 @@ searchable by duty.
 
 ## Requirements
 
-- Autodesk Revit 2022–2026.
+- Autodesk Revit 2022–2027.
 - A fan family (`.rfa`) in the Mechanical Equipment category, with its Revit type
   catalogue (`.csv`) beside it under the same name.
 - For the duct stub: an air terminal family loaded in the project, plus a duct
@@ -173,8 +173,9 @@ version.
 Windows Installer package (MSI), not Autodesk App Manager packaging. The library
 installs to `C:\ProgramData\Vixeldorf\FanSelector\`, the example families to
 `Sample Families` beneath it, and one manifest per selected Revit version to
-`C:\ProgramData\Autodesk\Revit\Addins\<year>\`. The installer asks which Revit
-versions to register. Administrator rights are required. Uninstall through
+`C:\ProgramData\Autodesk\Revit\Addins\<year>\` — except 2027, whose manifest
+goes to `C:\Program Files\Autodesk\Revit\Addins\2027\`, because Revit 2027 no
+longer scans ProgramData. The installer asks which Revit versions to register. Administrator rights are required. Uninstall through
 Windows Settings > Apps; fans already placed are ordinary Revit mechanical
 equipment and stay untouched.
 
@@ -194,7 +195,8 @@ equipment and stay untouched.
 - Attenuators appear only for a family that builds them itself from the two
   parameters `D silencer In` and `D silencer Out`; of the shipped families that
   is the axial fan.
-- Revit 2027 is not supported yet — it needs a separate .NET 10 build.
+- One build serves every supported release, including Revit 2027, which hosts
+  .NET 10 where 2025 and 2026 host .NET 8.
 
 ## Assets
 

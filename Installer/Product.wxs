@@ -50,6 +50,7 @@
 		<Property Id="REVIT2024" Value="1"/>
 		<Property Id="REVIT2025" Value="1"/>
 		<Property Id="REVIT2026" Value="1"/>
+		<Property Id="REVIT2027" Value="1"/>
 
 		<!-- ================== DIRECTORIES ================== -->
 		<Directory Id="TARGETDIR" Name="SourceDir">
@@ -115,6 +116,26 @@
 					</Directory>
 				</Directory>
 			</Directory>
+
+			<!-- Revit 2027 no longer scans ProgramData for machine-wide add-in
+			     manifests: shared third-party manifests live under
+			     %ProgramFiles%\Autodesk\Revit\Addins\2027 instead. Only the
+			     manifest moves — the DLL it points at stays in ProgramData with
+			     every other version's. -->
+			<Directory Id="ProgramFiles64Folder">
+				<Directory Id="AutodeskPF" Name="Autodesk">
+					<Directory Id="RevitPF" Name="Revit">
+						<Directory Id="AddinsPF" Name="Addins">
+							<Directory Id="R2027PF" Name="2027">
+								<Component Id="Addin2027" Guid="$(var.Addin2027Guid)" Win64="yes">
+									<Condition>REVIT2027=1</Condition>
+									<File Id="Addin2027File" Source="$(var.AddinDir)$(var.AddinFileStem)_27.addin"/>
+								</Component>
+							</Directory>
+						</Directory>
+					</Directory>
+				</Directory>
+			</Directory>
 		</Directory>
 
 		<!-- ================== FEATURES ================== -->
@@ -164,6 +185,13 @@
 					 Level="1"
 					 Absent="allow">
 				<ComponentRef Id="Addin2026"/>
+			</Feature>
+
+			<Feature Id="Revit2027Feature"
+					 Title="Revit 2027"
+					 Level="1"
+					 Absent="allow">
+				<ComponentRef Id="Addin2027"/>
 			</Feature>
 		</Feature>
 
@@ -224,6 +252,14 @@
 						 Property="REVIT2026"
 						 CheckBoxValue="1"
 						 Text="Revit 2026"/>
+
+				<Control Id="Revit2027"
+						 Type="CheckBox"
+						 X="20" Y="140"
+						 Width="200" Height="17"
+						 Property="REVIT2027"
+						 CheckBoxValue="1"
+						 Text="Revit 2027"/>
 
 				<Control Id="Next"
 						 Type="PushButton"
