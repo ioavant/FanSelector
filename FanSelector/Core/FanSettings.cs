@@ -110,16 +110,42 @@ namespace FanSelector.Core
 
         // ── Locations ─────────────────────────────────────────────────────────
 
-        private static string SharedPath
+        /// <summary>
+        /// The installed product folder — NOT simply the folder the running
+        /// assembly sits in. There are two assemblies: the net48 one for Revit
+        /// 2022-2024 lives in the product folder, the net8 one for 2025+ in a
+        /// "net8" subfolder of it. Reading the assembly's own folder would give
+        /// the two halves separate settings files, and the mapping is meant to
+        /// be the same in every Revit version on the machine.
+        /// </summary>
+        private static string ProductFolder
         {
             get
             {
                 try
                 {
                     string dir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
-                    return string.IsNullOrEmpty(dir) ? null : Path.Combine(dir, FileName);
+                    if (string.IsNullOrEmpty(dir)) return null;
+
+                    string leaf = Path.GetFileName(dir.TrimEnd(Path.DirectorySeparatorChar));
+                    if (string.Equals(leaf, "net8", StringComparison.OrdinalIgnoreCase))
+                    {
+                        string parent = Path.GetDirectoryName(dir.TrimEnd(Path.DirectorySeparatorChar));
+                        if (!string.IsNullOrEmpty(parent)) return parent;
+                    }
+
+                    return dir;
                 }
                 catch { return null; }
+            }
+        }
+
+        private static string SharedPath
+        {
+            get
+            {
+                string dir = ProductFolder;
+                return string.IsNullOrEmpty(dir) ? null : Path.Combine(dir, FileName);
             }
         }
 
@@ -148,7 +174,7 @@ namespace FanSelector.Core
             {
                 try
                 {
-                    string dir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+                    string dir = ProductFolder;
                     if (string.IsNullOrEmpty(dir)) return null;
                     string samples = Path.Combine(dir, "Sample Families");
                     return Directory.Exists(samples) ? samples : null;
