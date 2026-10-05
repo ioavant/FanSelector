@@ -59,34 +59,6 @@ namespace FanSelector.UI
         }
 
         /// <summary>
-        /// Revit hands out type previews as GDI+ bitmaps. Converting one to
-        /// something WPF can show means an HBITMAP, which has to be released by
-        /// hand or the add-in leaks a GDI object per preview.
-        /// </summary>
-        public static BitmapSource FromBitmap(System.Drawing.Bitmap bitmap)
-        {
-            if (bitmap == null) return null;
-            IntPtr handle = IntPtr.Zero;
-            try
-            {
-                handle = bitmap.GetHbitmap();
-                BitmapSource source = Imaging.CreateBitmapSourceFromHBitmap(
-                    handle, IntPtr.Zero, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
-                source.Freeze();
-                return source;
-            }
-            catch { return null; }
-            finally
-            {
-                if (handle != IntPtr.Zero) DeleteObject(handle);
-                bitmap.Dispose();
-            }
-        }
-
-        [System.Runtime.InteropServices.DllImport("gdi32.dll")]
-        private static extern bool DeleteObject(IntPtr hObject);
-
-        /// <summary>
         /// Banner text for a newer published version, or null when there is none
         /// (which is always the case for brands with update checking switched off).
         /// </summary>

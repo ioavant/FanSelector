@@ -171,7 +171,8 @@ version.
 ## Install / uninstall
 
 Windows Installer package (MSI), not Autodesk App Manager packaging. The library
-installs to `C:\ProgramData\Vixeldorf\FanSelector\`, the example families to
+installs to `C:\ProgramData\Vixeldorf\FanSelector\` (with the .NET 8 build for
+Revit 2025+ in `net8` beneath it), the example families to
 `Sample Families` beneath it, and one manifest per selected Revit version to
 `C:\ProgramData\Autodesk\Revit\Addins\<year>\` — except 2027, whose manifest
 goes to `C:\Program Files\Autodesk\Revit\Addins\2027\`, because Revit 2027 no
@@ -195,8 +196,10 @@ equipment and stay untouched.
 - Attenuators appear only for a family that builds them itself from the two
   parameters `D silencer In` and `D silencer Out`; of the shipped families that
   is the axial fan.
-- One build serves every supported release, including Revit 2027, which hosts
-  .NET 10 where 2025 and 2026 host .NET 8.
+- Two builds are installed side by side: a .NET Framework 4.8 one for Revit
+  2022–2024 and a .NET 8 one for 2025 and later, which is what those releases
+  run on. Each Revit version's manifest points at the right one; nothing about
+  this is visible in use.
 
 ## Assets
 

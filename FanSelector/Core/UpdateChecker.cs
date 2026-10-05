@@ -1,5 +1,5 @@
 using System;
-using System.Net;
+using System.Net.Http;
 using System.Reflection;
 using System.Threading.Tasks;
 
@@ -53,10 +53,14 @@ namespace FanSelector.Core
 
         private static void DoCheck()
         {
-            using (WebClient client = new WebClient())
+            // HttpClient rather than WebClient: the net8 build warns on WebClient,
+            // and this runs on a background task where blocking on the result is
+            // exactly as harmless as the synchronous call it replaces.
+            using (HttpClient client = new HttpClient())
             {
-                client.Headers[HttpRequestHeader.UserAgent] = "FanSelector-UpdateChecker/1.0";
-                string json = client.DownloadString(VersionUrl);
+                client.Timeout = TimeSpan.FromSeconds(15);
+                client.DefaultRequestHeaders.Add("User-Agent", "FanSelector-UpdateChecker/1.0");
+                string json = client.GetStringAsync(VersionUrl).GetAwaiter().GetResult();
                 UpdateInfo info = ParseJson(json);
                 if (info == null || info.Version == null) return;
 

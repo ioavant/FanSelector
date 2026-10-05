@@ -62,6 +62,15 @@
 							<File Id="MainDll" Source="$(var.MainDllPath)"/>
 						</Component>
 
+						<?if $(var.HasNet8) = "1" ?>
+						<!-- net8.0-windows build for Revit 2025+; the 2025+ manifests point here. -->
+						<Directory Id="NET8DIR" Name="net8">
+							<Component Id="CoreFilesNet8" Guid="*">
+								<File Id="MainDllNet8" Source="$(var.MainDllNet8Path)"/>
+							</Component>
+						</Directory>
+						<?endif?>
+
 						<!-- Example fan families with their type catalogues. Each
 						     .rfa needs its .csv beside it: that file is both what
 						     Revit reads to offer the types on load and what the
@@ -145,6 +154,9 @@
 			 Display="expand">
 
 			<ComponentRef Id="CoreFiles"/>
+			<?if $(var.HasNet8) = "1" ?>
+			<ComponentRef Id="CoreFilesNet8"/>
+			<?endif?>
 
 			<!-- Not optional. The example families are what a first-time user has
 			     to map against, and each .csv beside them is a working type

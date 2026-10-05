@@ -20,6 +20,10 @@
          upgrade range overlap this product's own version. That overlap is the
          point — see the comment in Product.wxs. -->
     <SuppressIces>ICE61</SuppressIces>
+    <!-- Don't push this project's Configuration/Platform onto the referenced
+         csproj: it is AnyCPU and multi-targeted, and an x64 solution property
+         sends it looking for an x64 output that does not exist. -->
+    <DefineSolutionProperties>false</DefineSolutionProperties>
   </PropertyGroup>
   <!-- Brand-scoped so both MSIs can be built back to back. -->
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|x64' ">
@@ -42,9 +46,16 @@
     </WixExtension>
   </ItemGroup>
   <ItemGroup>
+    <!-- AdditionalProperties pins this reference to one target framework. A
+         .wixproj is not SDK-aware: it cannot negotiate a framework with a
+         multi-targeted project, so it asks the outer build for GetTargetPath,
+         which only inner builds define — "The target GetTargetPath does not
+         exist in the project". Both frameworks still get built, by the csproj's
+         own node in the solution; this reference only orders the two. -->
     <ProjectReference Include="..\FanSelector\FanSelector.csproj">
       <Name>FanSelector</Name>
       <Project>{4B0737E6-45FC-458E-BCB7-712681D62601}</Project>
+      <AdditionalProperties>TargetFramework=net48</AdditionalProperties>
       <Private>True</Private>
       <DoNotHarvest>True</DoNotHarvest>
       <RefProjectOutputGroups>Binaries;Content;Satellites</RefProjectOutputGroups>

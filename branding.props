@@ -21,11 +21,14 @@
     <!-- IExternalApplication class the .addin manifests point at. -->
     <BrandAppClassName>FanSelector.App</BrandAppClassName>
 
-    <!-- One net48 assembly for all of them. 2027 hosts .NET 10 where 2025-2026
-         host .NET 8, but that is the runtime loading the add-in, not the add-in
-         itself; the manifest is what actually differs, and it goes to Program
-         Files there instead of ProgramData (see Installer\Product.wxs). -->
     <BrandSupportedRevitVersions>2022;2023;2024;2025;2026;2027</BrandSupportedRevitVersions>
+
+    <!-- Two assemblies, split here: 2022-2024 get the net48 build, 2025 and up
+         get the net8.0-windows one from the net8 subfolder. Revit 2025 runs on
+         .NET 8 and 2025.5 on .NET 10, where a net48 assembly only loads through
+         the compatibility layer. The engine generates the manifests on both
+         sides of this line and defines HasNet8 for the installer. -->
+    <BrandNet8MinRevitVersion>2025</BrandNet8MinRevitVersion>
 
     <!-- The add-in project folder; the engine derives the built DLL path from it.
          The file name is brand-dependent (FanSelector.dll / FanSelector.TES.dll),
