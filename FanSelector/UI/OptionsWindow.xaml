@@ -1,0 +1,254 @@
+<Window x:Class="FanSelector.UI.OptionsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:ClassModifier="internal"
+        Title="Fan Selector Options"
+        Height="720" Width="1020" MinHeight="600" MinWidth="880"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False"
+        Background="#FFF6F6F8"
+        UseLayoutRounding="True"
+        TextOptions.TextFormattingMode="Display">
+
+  <Window.Resources>
+    <Style x:Key="Section" TargetType="TextBlock">
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Margin" Value="0,14,0,6" />
+    </Style>
+    <Style x:Key="Hint" TargetType="TextBlock">
+      <Setter Property="Foreground" Value="#FF6B6B76" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+      <Setter Property="Margin" Value="0,4,0,0" />
+    </Style>
+    <Style TargetType="Button">
+      <Setter Property="Padding" Value="12,4" />
+      <Setter Property="MinWidth" Value="76" />
+    </Style>
+  </Window.Resources>
+
+  <DockPanel Margin="14">
+
+    <!-- Header -->
+    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,10">
+      <Image x:Name="LogoImage" Height="26" Margin="0,0,12,0"
+             HorizontalAlignment="Left" Stretch="Uniform" />
+      <TextBlock x:Name="TitleText" FontSize="15" FontWeight="SemiBold"
+                 VerticalAlignment="Center" Text="Fan Selector Options" />
+    </StackPanel>
+
+    <!-- Update banner: only ever visible in a brand that checks for updates -->
+    <Border x:Name="BannerBorder" DockPanel.Dock="Top" Visibility="Collapsed"
+            Background="#FFFFF9DB" BorderBrush="#FFE8D98A" BorderThickness="1"
+            Padding="8,5" Margin="0,0,0,10" Cursor="Hand"
+            MouseLeftButtonUp="OnBannerClick">
+      <TextBlock x:Name="BannerText" TextWrapping="Wrap" Foreground="#FF6B5A10" />
+    </Border>
+
+    <!-- Notice, e.g. "no families configured yet", or a settings file that would not load -->
+    <Border x:Name="NoticeBorder" DockPanel.Dock="Top" Visibility="Collapsed"
+            Background="#FFFFF1E6" BorderBrush="#FFE7C4A0" BorderThickness="1"
+            Padding="8,5" Margin="0,0,0,10">
+      <TextBlock x:Name="NoticeText" TextWrapping="Wrap" Foreground="#FF8A4B10" />
+    </Border>
+
+    <!-- Buttons -->
+    <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal"
+                HorizontalAlignment="Right" Margin="0,12,0,0">
+      <Button x:Name="OkButton" Content="OK" IsDefault="True" Click="OnOk" Margin="0,0,8,0" />
+      <Button x:Name="CancelButton" Content="Cancel" IsCancel="True" />
+    </StackPanel>
+
+    <TextBlock x:Name="LocationText" DockPanel.Dock="Bottom" Style="{StaticResource Hint}"
+               Margin="0,10,0,0" />
+
+    <!-- Search defaults -->
+    <Border DockPanel.Dock="Bottom" BorderBrush="#FFDDDDE3" BorderThickness="0,1,0,0"
+            Padding="0,10,0,0" Margin="0,12,0,0">
+      <Grid>
+        <Grid.RowDefinitions>
+          <RowDefinition Height="Auto" />
+          <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="Auto" />
+          <ColumnDefinition Width="Auto" />
+          <ColumnDefinition Width="Auto" />
+          <ColumnDefinition Width="30" />
+          <ColumnDefinition Width="Auto" />
+          <ColumnDefinition Width="Auto" />
+          <ColumnDefinition Width="Auto" />
+          <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <TextBlock Grid.Row="0" Grid.Column="0" Text="Default tolerance"
+                   VerticalAlignment="Center" Margin="0,0,8,0" />
+        <TextBox x:Name="ToleranceBox" Grid.Row="0" Grid.Column="1" Width="60"
+                 HorizontalAlignment="Left" />
+        <TextBlock Grid.Row="0" Grid.Column="2" Text="%" VerticalAlignment="Center" Margin="6,0,0,0" />
+
+        <TextBlock Grid.Row="0" Grid.Column="4" Text="Mounting offset above the picked point"
+                   VerticalAlignment="Center" Margin="0,0,8,0" />
+        <TextBox x:Name="OffsetBox" Grid.Row="0" Grid.Column="5" Width="90"
+                 HorizontalAlignment="Left" />
+        <TextBlock x:Name="OffsetUnitText" Grid.Row="0" Grid.Column="6"
+                   VerticalAlignment="Center" Margin="6,0,0,0" />
+
+        <!-- The duct system type lives on the main window instead, beside the
+             stub tick — it is decided per placement, not per configuration. -->
+        <TextBlock Grid.Row="1" Grid.Column="0" Text="Duct type for a stub"
+                   VerticalAlignment="Center" Margin="0,8,8,0" />
+        <ComboBox x:Name="DuctTypeBox" Grid.Row="1" Grid.Column="1" Width="170"
+                  HorizontalAlignment="Left" Margin="0,8,0,0" />
+      </Grid>
+    </Border>
+
+    <!-- Families and their mapping -->
+    <Grid>
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="230" />
+        <ColumnDefinition Width="16" />
+        <ColumnDefinition Width="*" />
+      </Grid.ColumnDefinitions>
+
+      <DockPanel Grid.Column="0">
+        <TextBlock DockPanel.Dock="Top" Text="Configured fan families" Style="{StaticResource Section}"
+                   Margin="0,0,0,6" />
+
+        <Button DockPanel.Dock="Bottom" x:Name="RemoveButton" Content="Remove selected"
+                Click="OnRemoveFamily" Margin="0,8,0,0" HorizontalAlignment="Stretch" />
+
+        <DockPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
+          <Button DockPanel.Dock="Right" x:Name="AddButton" Content="Add"
+                  Click="OnAddFamily" Margin="6,0,0,0" MinWidth="56" />
+          <ComboBox x:Name="AddFamilyBox" />
+        </DockPanel>
+
+        <TextBlock DockPanel.Dock="Bottom" x:Name="FamilyHint" Style="{StaticResource Hint}"
+                   Text="Mechanical Equipment families loaded in this project." />
+
+        <ListBox x:Name="FamilyList" DisplayMemberPath="FamilyName"
+                 SelectionChanged="OnFamilySelected" />
+      </DockPanel>
+
+      <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto" Padding="0,0,8,0">
+        <StackPanel x:Name="MappingPanel">
+
+          <DockPanel Margin="0,0,0,2">
+            <Button DockPanel.Dock="Right" x:Name="CopyParamsButton" Content="Copy details"
+                    Click="OnCopyParameters" MinWidth="104" Margin="8,0,0,0"
+                    ToolTip="Copy the catalogue's columns and the family's parameters to the clipboard." />
+            <TextBlock x:Name="MappingHeader" FontWeight="SemiBold" VerticalAlignment="Center"
+                       Text="Parameter mapping" />
+          </DockPanel>
+
+          <!-- Catalogue file -->
+          <TextBlock Text="Type catalogue" Style="{StaticResource Section}" Margin="0,10,0,4" />
+          <TextBlock Style="{StaticResource Hint}" Margin="0,0,0,6"
+                     Text="The .csv beside the family file. It is the performance database — and the very same file Revit reads to decide which types the family offers, so the two can never drift apart." />
+          <DockPanel>
+            <Button DockPanel.Dock="Right" x:Name="BrowseButton" Content="Browse…"
+                    Click="OnBrowseCatalog" Margin="6,0,0,0" MinWidth="80" />
+            <TextBox x:Name="CatalogBox" VerticalContentAlignment="Center"
+                     TextChanged="OnCatalogTextChanged" />
+          </DockPanel>
+          <TextBlock x:Name="CatalogStatus" Style="{StaticResource Hint}" />
+
+          <!-- Which column names the Revit type. Not the same as the designation:
+               a family holds one type per size, and many duty points share it. -->
+          <DockPanel Margin="0,8,0,0">
+            <TextBlock DockPanel.Dock="Left" Text="Revit type name from"
+                       VerticalAlignment="Center" Margin="0,0,8,0" />
+            <ComboBox x:Name="TypeColumnBox" DisplayMemberPath="Label"
+                      SelectionChanged="OnTypeColumnChanged" />
+          </DockPanel>
+          <TextBlock x:Name="TypeColumnStatus" Style="{StaticResource Hint}" />
+
+          <TextBlock x:Name="PictureHint" Style="{StaticResource Hint}" Margin="0,8,0,0" />
+
+          <!-- Mapping -->
+          <TextBlock Text="Figures" Style="{StaticResource Section}" />
+          <CheckBox x:Name="ShowAllBox" Content="Show every column and every parameter, whatever its kind"
+                    Click="OnShowAllChanged" Margin="0,0,0,10" />
+
+          <Grid x:Name="MappingGrid">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="120" />
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="12" />
+              <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+              <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <TextBlock Grid.Row="0" Grid.Column="1" Text="Read from the catalogue"
+                       FontWeight="SemiBold" Margin="0,0,0,4" />
+            <TextBlock Grid.Row="0" Grid.Column="3" Text="Write onto the placed fan (optional)"
+                       FontWeight="SemiBold" Margin="0,0,0,4" />
+          </Grid>
+
+          <!-- Says WHY a required figure has nothing to map to. An empty dropdown
+               on its own is indistinguishable from a broken add-in. -->
+          <Border x:Name="MappingWarnBorder" Visibility="Collapsed"
+                  Background="#FFFFF1E6" BorderBrush="#FFE7C4A0" BorderThickness="1"
+                  Padding="8,6" Margin="0,8,0,0">
+            <TextBlock x:Name="MappingWarnText" TextWrapping="Wrap" Foreground="#FF8A4B10" />
+          </Border>
+
+          <TextBlock Text="Extra columns" Style="{StaticResource Section}" />
+          <TextBlock Style="{StaticResource Hint}" Margin="0,0,0,6"
+                     Text="Any other catalogue columns you want to see beside the results — frame size, weight, order code. Shown only, never filtered on." />
+
+          <DockPanel>
+            <Button DockPanel.Dock="Right" x:Name="AddExtraButton" Content="Add"
+                    Click="OnAddExtra" Margin="6,0,0,0" MinWidth="56" />
+            <ComboBox x:Name="ExtraPicker" DisplayMemberPath="Label" />
+          </DockPanel>
+          <ListBox x:Name="ExtraList" Height="78" Margin="0,6,0,0" />
+          <Button x:Name="RemoveExtraButton" Content="Remove selected column"
+                  Click="OnRemoveExtra" Margin="0,6,0,0" HorizontalAlignment="Left" />
+
+          <!-- Duct stub -->
+          <TextBlock Text="Duct stub and closer" Style="{StaticResource Section}" />
+          <TextBlock Style="{StaticResource Hint}" Margin="0,0,0,6"
+                     Text="Per family on purpose: it suits a fan that sits in a duct run, not every fan. When on, placing a fan also grows a short round duct off one connector — the connector's own diameter — and caps it with an air terminal carrying the air flow you searched for, so the model has a real connected duty straight away." />
+          <CheckBox x:Name="StubBox" Content="Grow a duct stub and cap it when placing this fan"
+                    Click="OnStubToggled" />
+
+          <Grid x:Name="StubDetails" Margin="20,8,0,0">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="110" />
+              <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <TextBlock Grid.Row="0" Grid.Column="0" Text="Closer family"
+                       VerticalAlignment="Center" Margin="0,0,8,6" />
+            <ComboBox Grid.Row="0" Grid.Column="1" x:Name="CloserBox" IsEditable="True"
+                      Margin="0,0,0,6" />
+
+            <TextBlock Grid.Row="1" Grid.Column="0" Text="Connection size"
+                       VerticalAlignment="Center" Margin="0,0,8,6" />
+            <ComboBox Grid.Row="1" Grid.Column="1" x:Name="CloserSizeBox" IsEditable="True"
+                      Margin="0,0,0,6"
+                      ToolTip="The closer's own instance parameter that sets its connection diameter. It is given the duct's size, which the duct took from the fan." />
+
+            <TextBlock Grid.Row="2" Grid.Column="0" Text="Stub length"
+                       VerticalAlignment="Center" Margin="0,0,8,0" />
+            <DockPanel Grid.Row="2" Grid.Column="1">
+              <TextBlock DockPanel.Dock="Right" x:Name="StubUnitText" VerticalAlignment="Center"
+                         Margin="6,0,0,0" MinWidth="40" />
+              <TextBox x:Name="StubLengthBox" Width="110" HorizontalAlignment="Left" />
+            </DockPanel>
+          </Grid>
+
+        </StackPanel>
+      </ScrollViewer>
+    </Grid>
+
+  </DockPanel>
+</Window>

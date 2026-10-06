@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+
+	<!--
+	  Sample content, not program data. The add-in reads fan performance from
+	  whatever family the user has loaded in their project, so these three exist
+	  only to give a first-time user something to map a family against.
+
+	  Each .rfa is paired with the .csv that is its Revit TYPE CATALOGUE — the
+	  two must stay in the same folder or Revit will not offer the types when the
+	  family is loaded.
+
+	  Guid="*" on purpose: the install folder is brand-dependent
+	  (%ProgramData%\TES\… vs %ProgramData%\Vixeldorf\…), and an auto-generated
+	  component GUID is derived from that path, so each brand gets its own
+	  without a hand-maintained GUID table.
+	-->
+	<Fragment>
+		<ComponentGroup Id="SampleFamilies" Directory="SAMPLESDIR">
+
+			<Component Id="SampleAxialRfa" Guid="*">
+				<File Id="SampleAxialRfaFile" KeyPath="yes" Source="InstallerSource\ME_Axial Fan.rfa"/>
+			</Component>
+			<Component Id="SampleAxialCsv" Guid="*">
+				<File Id="SampleAxialCsvFile" KeyPath="yes" Source="InstallerSource\ME_Axial Fan.csv"/>
+			</Component>
+
+			<Component Id="SampleCentrifugalRfa" Guid="*">
+				<File Id="SampleCentrifugalRfaFile" KeyPath="yes" Source="InstallerSource\ME_Centrifugal Fan.rfa"/>
+			</Component>
+			<Component Id="SampleCentrifugalCsv" Guid="*">
+				<File Id="SampleCentrifugalCsvFile" KeyPath="yes" Source="InstallerSource\ME_Centrifugal Fan.csv"/>
+			</Component>
+
+			<Component Id="SampleInLineRfa" Guid="*">
+				<File Id="SampleInLineRfaFile" KeyPath="yes" Source="InstallerSource\ME_Venta InLine.rfa"/>
+			</Component>
+			<Component Id="SampleInLineCsv" Guid="*">
+				<File Id="SampleInLineCsvFile" KeyPath="yes" Source="InstallerSource\ME_Venta InLine.csv"/>
+			</Component>
+
+		</ComponentGroup>
+	</Fragment>
+</Wix>
