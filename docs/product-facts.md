@@ -18,7 +18,7 @@ each consumer styles this its own way.
 - **Name:** Fan Selector
 - **Publisher:** Vixeldorf
 - **Category:** Revit add-in — MEP / HVAC equipment selection
-- **Current version:** 2.0.1
+- **Current version:** 2.1.0
 - **Platform:** Autodesk Revit 2022 through 2027 (Windows, 64-bit)
 - **Interface language:** English
 - **Website:** https://www.vixeldorf.com
@@ -219,6 +219,14 @@ code:
   Options mapping dialog, and a placed fan with its duct stub and attenuators.
 
 ## Version history
+
+### 2.1.0
+
+- Revit 2027 support.
+- A separate .NET 8 build for Revit 2025 and later, matching what those
+  releases run on, installed beside the .NET Framework build the earlier
+  versions use. Revit 2025.5 no longer hangs when it is restarted.
+- Fans are hosted on the level of the view the point was picked in.
 
 ### 2.0.1
 
